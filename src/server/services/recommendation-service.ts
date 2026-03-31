@@ -1,9 +1,13 @@
-import { scorePlatforms } from "@/lib/scoring/engine";
 import type { PlatformRecommendation } from "@/lib/scoring/types";
 
-import { scanRepository } from "@/server/services/scan-service";
+import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 
-export async function recommendPlatforms(repoId: string): Promise<PlatformRecommendation[]> {
-  const { signals } = await scanRepository(repoId);
-  return scorePlatforms(signals);
+export async function recommendPlatforms(
+  repoId: string,
+  options?: {
+    refresh?: boolean;
+  }
+): Promise<PlatformRecommendation[]> {
+  const analysis = await getRepositoryAnalysis(repoId, options);
+  return analysis.recommendations;
 }

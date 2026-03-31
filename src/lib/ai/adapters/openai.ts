@@ -1,3 +1,4 @@
+import { env } from "@/lib/env";
 import type { ModelAdapter, ModelObjectRequest, ModelTextRequest, StreamHandle } from "@/lib/ai/types";
 
 class TextStreamHandle implements StreamHandle {
@@ -8,32 +9,89 @@ class TextStreamHandle implements StreamHandle {
   }
 }
 
+interface OpenAIResponsesApiResponse {
+  output_text?: string;
+}
+
+async function createOpenAIResponse(input: {
+  system: string;
+  prompt: string;
+  json?: boolean;
+}) {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is required to use the OpenAI provider.");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: env.OPENAI_MODEL,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: input.system }]
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: input.prompt }]
+        }
+      ],
+      ...(input.json
+        ? {
+            text: {
+              format: {
+                type: "json_object"
+              }
+            }
+          }
+        : {})
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI request failed (${response.status}): ${errorText}`);
+  }
+
+  return (await response.json()) as OpenAIResponsesApiResponse;
+}
+
 export class OpenAIAdapter implements ModelAdapter {
   name = "openai" as const;
   supportsStreaming = true;
   supportsStructuredOutputs = true;
 
   async generateObject<T>(input: ModelObjectRequest<T>) {
-    if (!input.parse) {
-      throw new Error("OpenAIAdapter requires a parser for structured outputs.");
+    const response = await createOpenAIResponse({
+      system: `${input.system}\nRespond with JSON only.`,
+      prompt: input.prompt,
+      json: true
+    });
+
+    const raw = response.output_text;
+
+    if (!raw) {
+      throw new Error("OpenAI returned no structured output.");
     }
 
-    return input.parse({
-      title: "Generated deployment plan",
-      summary: "Structured generation is scaffolded and ready for provider wiring.",
-      topPlatform: "Railway",
-      score: 0,
-      confidence: 0,
-      blockers: [],
-      warnings: [],
-      nextSteps: []
-    });
+    const parsed = JSON.parse(raw);
+    return input.parse ? input.parse(parsed) : (parsed as T);
   }
 
   async streamText(input: ModelTextRequest) {
-    return new TextStreamHandle(
-      `Provider ${this.name} is configured as the primary chat provider. Prompt received: ${input.prompt}`
-    );
+    const response = await createOpenAIResponse({
+      system: input.system,
+      prompt: input.prompt
+    });
+
+    if (!response.output_text) {
+      throw new Error("OpenAI returned no text output.");
+    }
+
+    return new TextStreamHandle(response.output_text);
   }
 }
-

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { SendIcon, SparklesIcon } from "@/components/ui/icons";
+
 interface DeploymentPlan {
   title: string;
   summary: string;
@@ -15,6 +17,7 @@ interface DeploymentPlan {
 
 interface ChatWorkspaceProps {
   repoId: string;
+  repoLabel: string;
   initialPlan: DeploymentPlan;
 }
 
@@ -24,26 +27,34 @@ interface ChatBubble {
   text: string;
 }
 
-export function ChatWorkspace({ repoId, initialPlan }: ChatWorkspaceProps) {
+const quickPrompts = [
+  "Where should I deploy?",
+  "Why is this not a Vercel fit?",
+  "Summarize blockers before launch"
+];
+
+export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceProps) {
   const [messages, setMessages] = useState<ChatBubble[]>([
     {
       id: "initial-assistant",
       role: "assistant",
-      text: `${initialPlan.summary} Top platform: ${initialPlan.topPlatform}.`
+      text: `${initialPlan.summary} Ask for a recommendation, compare tradeoffs, or request a tighter launch checklist for ${repoLabel}.`
     }
   ]);
-  const [input, setInput] = useState("Where should I deploy this?");
+  const [input, setInput] = useState("Where should I deploy?");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function sendMessage() {
-    if (!input.trim() || isSubmitting) {
+  async function sendMessage(nextInput?: string) {
+    const value = (nextInput ?? input).trim();
+
+    if (!value || isSubmitting) {
       return;
     }
 
     const userMessage: ChatBubble = {
       id: `user-${Date.now()}`,
       role: "user",
-      text: input.trim()
+      text: value
     };
 
     setMessages((current) => [...current, userMessage]);
@@ -90,59 +101,52 @@ export function ChatWorkspace({ repoId, initialPlan }: ChatWorkspaceProps) {
   }
 
   return (
-    <section
-      className="panel"
-      style={{
-        padding: 0,
-        display: "grid",
-        gridTemplateRows: "auto 1fr auto",
-        minHeight: 620
-      }}
-    >
-      <div style={{ padding: 22, borderBottom: "1px solid var(--border)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <h1 style={{ margin: 0, marginBottom: 6 }}>{initialPlan.title}</h1>
-            <p className="muted" style={{ margin: 0 }}>
-              Chat with Shipd about blockers, tradeoffs, and platform fit.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <span className="token-pill token-pill-green">{initialPlan.topPlatform}</span>
-            <span className="token-pill">{initialPlan.score}/100</span>
-            <span className="token-pill">{Math.round(initialPlan.confidence * 100)}% confidence</span>
-          </div>
+    <section className="chat-workspace panel">
+      <div className="chat-workspace-header">
+        <div>
+          <div className="chat-workspace-title">{initialPlan.title}</div>
+          <div className="chat-workspace-copy">Work through tradeoffs, blockers, and next steps from one planning thread.</div>
+        </div>
+        <div className="chat-workspace-chips">
+          <span className="repo-chip repo-chip-accent">{initialPlan.topPlatform}</span>
+          <span className="repo-chip">{initialPlan.score}/100</span>
+          <span className="repo-chip">{Math.round(initialPlan.confidence * 100)}% confidence</span>
         </div>
       </div>
 
-      <div style={{ padding: 22, display: "grid", gap: 14, alignContent: "start" }}>
+      <div className="chat-thread">
         {messages.map((message) => (
-          <div
-            key={message.id}
-            style={{
-              justifySelf: message.role === "user" ? "end" : "start",
-              maxWidth: "80%",
-              borderRadius: 16,
-              border: message.role === "user" ? "1px solid var(--border)" : "1px solid transparent",
-              background: message.role === "user" ? "var(--bg-surface-2)" : "transparent",
-              padding: message.role === "user" ? "14px 16px" : "0"
-            }}
-          >
-            <div
-              style={{
-                fontSize: 14,
-                lineHeight: 1.7,
-                color: message.role === "user" ? "var(--text-primary)" : "var(--text-secondary)"
-              }}
-            >
+          <div key={message.id} className={message.role === "assistant" ? "chat-message chat-message-assistant" : "chat-message chat-message-user"}>
+            {message.role === "assistant" ? (
+              <div className="chat-message-avatar">
+                <SparklesIcon size={14} />
+              </div>
+            ) : null}
+            <div className={message.role === "assistant" ? "chat-message-body" : "chat-message-user-bubble"}>
               {message.text}
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ borderTop: "1px solid var(--border)", padding: 18 }}>
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "minmax(0, 1fr) auto" }}>
+      <div className="chat-prompt-row">
+        {quickPrompts.map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
+            className="chat-quick-prompt"
+            onClick={() => {
+              setInput(prompt);
+              void sendMessage(prompt);
+            }}
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
+
+      <div className="chat-input-shell">
+        <div className="chat-input-wrap">
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
@@ -152,37 +156,23 @@ export function ChatWorkspace({ repoId, initialPlan }: ChatWorkspaceProps) {
                 void sendMessage();
               }
             }}
-            placeholder="Ask anything about your deployment..."
-            style={{
-              width: "100%",
-              borderRadius: 12,
-              border: "1px solid var(--border)",
-              background: "var(--bg-surface-2)",
-              color: "var(--text-primary)",
-              padding: "14px 16px"
-            }}
+            placeholder="Ask about deployment, blockers, or platform fit..."
+            className="chat-input"
           />
           <button
             type="button"
             onClick={() => void sendMessage()}
             disabled={isSubmitting}
-            style={{
-              borderRadius: 12,
-              border: "none",
-              background: "var(--accent-blue)",
-              color: "#fff",
-              padding: "0 18px",
-              minWidth: 96,
-              fontWeight: 600,
-              opacity: isSubmitting ? 0.7 : 1,
-              cursor: isSubmitting ? "progress" : "pointer"
-            }}
+            className="chat-send-button"
+            aria-label="Send message"
           >
-            {isSubmitting ? "Sending" : "Send"}
+            <SendIcon size={16} />
           </button>
+        </div>
+        <div className="chat-input-hint">
+          Try: “Where should I deploy?”, “Why not Railway?”, or “Summarize blockers before launch”.
         </div>
       </div>
     </section>
   );
 }
-

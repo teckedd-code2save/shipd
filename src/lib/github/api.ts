@@ -24,6 +24,19 @@ async function githubRequest<T>(path: string, token: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function githubResponse(path: string, token: string) {
+  const response = await fetch(`${GITHUB_API_BASE}${path}`, {
+    headers: headers(token),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub request failed (${response.status}) for ${path}`);
+  }
+
+  return response;
+}
+
 interface GitHubRepoApiRecord {
   id: number;
   name: string;
@@ -51,10 +64,20 @@ interface GitHubContentDirectoryEntry {
 }
 
 export async function listViewerRepositories(token: string): Promise<GitHubRepositorySummary[]> {
-  const repos = await githubRequest<GitHubRepoApiRecord[]>(
-    "/user/repos?sort=updated&per_page=100",
-    token
-  );
+  const repos: GitHubRepoApiRecord[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await githubResponse(`/user/repos?sort=updated&per_page=100&page=${page}`, token);
+    const batch = (await response.json()) as GitHubRepoApiRecord[];
+    repos.push(...batch);
+
+    if (batch.length < 100) {
+      break;
+    }
+
+    page += 1;
+  }
 
   return repos.map((repo) => ({
     githubId: String(repo.id),
@@ -104,4 +127,3 @@ export async function listRepositoryDirectory(
     token
   );
 }
-

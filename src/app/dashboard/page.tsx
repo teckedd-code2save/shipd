@@ -18,11 +18,18 @@ export default async function DashboardPage() {
         <div className="app-grid">
           <DashboardSidebar />
           <section style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: 34, marginBottom: 8 }}>Repositories</h1>
-            <p className="muted" style={{ marginBottom: 24 }}>
-              Connect a repo, scan deployment signals, compare realistic hosting options, and open a
-              planning chat.
-            </p>
+            <section className="dashboard-hero">
+              <div>
+                <div className="dashboard-hero-wordmark">Shipd</div>
+                <div className="dashboard-hero-kicker">Deployment planning workspace</div>
+                <h1 style={{ fontSize: 34, marginBottom: 10, marginTop: 0, letterSpacing: "-0.04em" }}>
+                  Point it at your repos. Open the right deployment plan fast.
+                </h1>
+                <p className="muted" style={{ marginBottom: 0, maxWidth: 760, lineHeight: 1.72 }}>
+                  Use the dashboard to triage your repo inventory, open a planning workspace, and keep comparison and scan actions in one place instead of scattering them across every card.
+                </p>
+              </div>
+            </section>
             {!session?.user ? (
               <section className="panel" style={{ padding: 20, marginBottom: 24 }}>
                 <h2 style={{ marginTop: 0 }}>Connect GitHub to continue</h2>

@@ -82,7 +82,9 @@ export async function listRepositoriesForDashboard() {
       owner: repo.owner,
       name: repo.name,
       fullName: repo.fullName,
-      lastScanned: "Not yet scanned"
+      lastScanned: "Not yet scanned",
+      topPlatform: undefined,
+      topScore: undefined
     }));
   }
 
@@ -94,7 +96,9 @@ export async function listRepositoriesForDashboard() {
       owner: repo.owner,
       name: repo.name,
       fullName: repo.fullName,
-      lastScanned: "Not yet scanned"
+      lastScanned: "Not yet scanned",
+      topPlatform: undefined,
+      topScore: undefined
     }));
   }
 
@@ -108,12 +112,23 @@ export async function listRepositoriesForDashboard() {
         select: { createdAt: true }
       });
 
+      const topPlan = await prisma.deploymentPlan.findFirst({
+        where: { repositoryId: repo.id },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          platform: true,
+          score: true
+        }
+      });
+
       return {
         id: repo.id,
         owner: repo.owner,
         name: repo.name,
         fullName: repo.fullName,
-        lastScanned: lastScan ? lastScan.createdAt.toISOString() : "Not yet scanned"
+        lastScanned: lastScan ? lastScan.createdAt.toISOString() : "Not yet scanned",
+        topPlatform: topPlan?.platform,
+        topScore: topPlan?.score
       };
     })
   );
@@ -132,4 +147,3 @@ export async function findRepositoryById(repoId: string) {
     }
   });
 }
-

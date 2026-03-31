@@ -4,5 +4,6 @@ export interface DashboardRepository {
   name: string;
   fullName: string;
   lastScanned: string;
+  topPlatform?: string;
+  topScore?: number;
 }
-

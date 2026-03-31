@@ -4,10 +4,11 @@ import type { PlatformRule } from "@/lib/scoring/rules";
 export const renderRule: PlatformRule = {
   platform: "Render",
   score(signals: RepoSignals) {
-    let score = 52;
+    let score = 38;
     if (signals.hasDockerfile) score += 12;
-    if (signals.envVars.some((value) => value.includes("DATABASE"))) score += 6;
-    if (signals.framework === "nextjs") score += 4;
+    if (signals.envVars.some((value) => value.includes("DATABASE"))) score += 8;
+    if (signals.framework === "nextjs") score += 8;
+    if (signals.framework === "nextjs" && !signals.hasDockerfile) score += 4;
     return score;
   },
   reasons(signals: RepoSignals) {
@@ -19,4 +20,3 @@ export const renderRule: PlatformRule = {
     return reasons;
   }
 };
-

@@ -39,5 +39,5 @@ export interface ModelAdapter {
 export interface ChatMessageInput {
   repoId: string;
   message: string;
+  context?: string;
 }
-

@@ -1,6 +1,10 @@
-import { SiteHeader } from "@/components/layout/site-header";
+import Link from "next/link";
+
 import { ChatWorkspace } from "@/components/chat/chat-workspace";
-import { buildDeploymentPlan } from "@/server/services/plan-service";
+import { ArrowLeftIcon, ChartIcon, FileIcon, GitHubIcon, RefreshIcon } from "@/components/ui/icons";
+import { getRepositoryAnalysis } from "@/server/services/analysis-service";
+import { runRepositoryScanAction } from "@/app/dashboard/actions";
+import { findRepositoryById } from "@/server/services/repository-service";
 
 export default async function ChatPage({
   params
@@ -8,47 +12,89 @@ export default async function ChatPage({
   params: Promise<{ repoId: string }>;
 }) {
   const { repoId } = await params;
-  const plan = await buildDeploymentPlan(repoId);
+  const analysis = await getRepositoryAnalysis(repoId);
+  const repository = await findRepositoryById(repoId);
+  const plan = analysis.plan;
+  const repoLabel = repository ? `${repository.owner}/${repository.name}` : analysis.repoId;
 
   return (
     <>
-      <SiteHeader />
-      <main className="page">
-        <div className="app-grid">
-          <aside className="panel" style={{ padding: 20 }}>
-            <div className="muted" style={{ marginBottom: 12 }}>
-              Repo
+      <main className="chat-page">
+        <section className="chat-shell">
+          <header className="chat-topbar">
+            <div className="chat-topbar-title">
+              <Link href="/dashboard" className="chat-icon-link" aria-label="Back to dashboard">
+                <ArrowLeftIcon size={17} />
+              </Link>
+              <GitHubIcon size={16} style={{ color: "var(--text-secondary)" }} />
+              <div>
+                <div className="chat-repo-title">{repository?.name ?? "Repository"}</div>
+                <div className="chat-repo-subtitle">{repoLabel}</div>
+              </div>
             </div>
-            <div style={{ fontWeight: 700, marginBottom: 20 }}>{repoId}</div>
-            <div
-              style={{
-                fontSize: 42,
-                fontWeight: 700,
-                color: plan.score > 80 ? "var(--success)" : "var(--warning)",
-                marginBottom: 8
-              }}
-            >
-              {plan.score} / 100
+            <div className="chat-topbar-actions">
+              <form action={runRepositoryScanAction}>
+                <input type="hidden" name="repoId" value={repoId} />
+                <button type="submit" className="chat-icon-link" aria-label="Run scan">
+                  <RefreshIcon size={16} />
+                </button>
+              </form>
+              <Link href={`/comparison/${repoId}`} className="chat-icon-link" aria-label="Compare platforms">
+                <ChartIcon size={16} />
+              </Link>
+              <Link href={`/scan/${repoId}`} className="chat-icon-link" aria-label="View scan">
+                <FileIcon size={16} />
+              </Link>
             </div>
-            <div className="muted">
-              {plan.blockers.length} blockers · {plan.warnings.length} warnings · {plan.nextSteps.length} next
-              steps
-            </div>
-            <div style={{ marginTop: 24, display: "grid", gap: 10 }}>
-              {plan.blockers.map((blocker) => (
-                <div key={blocker} style={{ color: "var(--danger)" }}>
-                  [!] {blocker}
+          </header>
+
+          <div className="chat-layout">
+            <aside className="chat-sidebar panel">
+              <div className="chat-sidebar-score">
+                <div className="chat-sidebar-label">Best fit</div>
+                <div className="chat-sidebar-platform">{plan.topPlatform}</div>
+                <div className="chat-sidebar-score-value">{plan.score}%</div>
+              </div>
+
+              <div className="chat-sidebar-section">
+                <div className="chat-sidebar-label">Confidence</div>
+                <div className="chat-sidebar-copy">{Math.round(plan.confidence * 100)}% based on saved repository signals.</div>
+              </div>
+
+              <div className="chat-sidebar-section">
+                <div className="chat-sidebar-label">Blockers</div>
+                <div className="chat-sidebar-list">
+                  {plan.blockers.length > 0 ? (
+                    plan.blockers.map((blocker, index) => (
+                      <div key={`${blocker}-${index}`} className="chat-sidebar-list-item danger">
+                        {blocker}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="chat-sidebar-list-item neutral">No blockers detected yet.</div>
+                  )}
                 </div>
-              ))}
-              {plan.warnings.map((warning) => (
-                <div key={warning} style={{ color: "var(--warning)" }}>
-                  [~] {warning}
+              </div>
+
+              <div className="chat-sidebar-section">
+                <div className="chat-sidebar-label">Warnings</div>
+                <div className="chat-sidebar-list">
+                  {plan.warnings.length > 0 ? (
+                    plan.warnings.map((warning, index) => (
+                      <div key={`${warning}-${index}`} className="chat-sidebar-list-item warn">
+                        {warning}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="chat-sidebar-list-item neutral">No major warnings detected.</div>
+                  )}
                 </div>
-              ))}
-            </div>
-          </aside>
-          <ChatWorkspace repoId={repoId} initialPlan={plan} />
-        </div>
+              </div>
+            </aside>
+
+            <ChatWorkspace repoId={repoId} initialPlan={plan} repoLabel={repoLabel} />
+          </div>
+        </section>
       </main>
     </>
   );

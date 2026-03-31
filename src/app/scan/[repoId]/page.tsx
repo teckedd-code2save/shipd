@@ -1,5 +1,5 @@
 import { SiteHeader } from "@/components/layout/site-header";
-import { scanRepository } from "@/server/services/scan-service";
+import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 
 export default async function ScanPage({
   params
@@ -7,7 +7,7 @@ export default async function ScanPage({
   params: Promise<{ repoId: string }>;
 }) {
   const { repoId } = await params;
-  const scan = await scanRepository(repoId);
+  const analysis = await getRepositoryAnalysis(repoId);
 
   return (
     <>
@@ -15,12 +15,12 @@ export default async function ScanPage({
       <main className="page">
         <h1 style={{ fontSize: 28, marginBottom: 8 }}>Scan results</h1>
         <p className="muted" style={{ marginBottom: 24 }}>
-          Full transparency for {repoId}
+          Full transparency for {analysis.repoId}
         </p>
         <section className="panel" style={{ padding: 20 }}>
-          {scan.findings.map((finding) => (
+          {analysis.findings.map((finding, index) => (
             <div
-              key={`${finding.filePath}-${finding.title}`}
+              key={`${finding.filePath}-${finding.title}-${finding.lineNumber ?? "na"}-${index}`}
               style={{
                 padding: "14px 0",
                 borderBottom: "1px solid var(--border)"

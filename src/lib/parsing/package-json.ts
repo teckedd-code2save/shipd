@@ -17,6 +17,11 @@ export function parsePackageJson(content: string) {
       ...parsed.devDependencies
     };
 
+    const startScript = parsed.scripts?.start ?? "";
+    const customServer =
+      /(?:^|\s)(node|tsx|ts-node|bun)\s+.*(server|app)\.(js|ts)/i.test(startScript) ||
+      /next\s+start\s+.*server/i.test(startScript);
+
     const signals: Partial<RepoSignals> = {
       framework: dependencies.next
         ? "nextjs"
@@ -29,7 +34,8 @@ export function parsePackageJson(content: string) {
         ? "node20"
         : parsed.engines?.node?.includes("18")
           ? "node18"
-          : "unknown"
+          : "unknown",
+      hasCustomServer: customServer
     };
 
     findings.push({
@@ -49,6 +55,15 @@ export function parsePackageJson(content: string) {
       });
     }
 
+    if (customServer) {
+      findings.push({
+        filePath: "package.json",
+        severity: "info",
+        title: "Custom server entrypoint detected",
+        detail: "The start script appears to launch a custom runtime entrypoint."
+      });
+    }
+
     return { signals, findings };
   } catch {
     return {
@@ -64,4 +79,3 @@ export function parsePackageJson(content: string) {
     };
   }
 }
-

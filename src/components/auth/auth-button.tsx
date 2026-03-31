@@ -1,4 +1,5 @@
 import { auth, signIn, signOut } from "@/auth";
+import { GitHubIcon } from "@/components/ui/icons";
 import { hasAuthEnv } from "@/lib/env";
 
 function buttonStyle(primary: boolean) {
@@ -9,10 +10,14 @@ function buttonStyle(primary: boolean) {
     gap: 8,
     borderRadius: 999,
     border: primary ? "none" : "1px solid var(--border)",
-    background: primary ? "var(--accent-blue)" : "transparent",
+    background: primary
+      ? "linear-gradient(135deg, #5b6cf2 0%, #4a5be3 100%)"
+      : "rgba(255, 255, 255, 0.02)",
     color: "#fff",
-    padding: "14px 18px",
+    padding: primary ? "12px 18px" : "11px 15px",
     fontWeight: 600,
+    letterSpacing: "-0.01em",
+    boxShadow: primary ? "0 18px 40px rgba(54, 77, 220, 0.28)" : "none",
     cursor: "pointer"
   } as const;
 }
@@ -51,6 +56,7 @@ export async function AuthButton({ redirectTo = "/dashboard" }: { redirectTo?: s
       }}
     >
       <button type="submit" style={buttonStyle(true)}>
+        <GitHubIcon size={17} />
         Connect GitHub repo
       </button>
     </form>

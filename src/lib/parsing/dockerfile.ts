@@ -8,7 +8,6 @@ export function parseDockerfile(content: string) {
   const lines = content.split("\n");
 
   const node20 = /node:20/i.test(content);
-  const customServer = /npm\s+start|node\s+server/i.test(content);
 
   lines.forEach((line, index) => {
     if (/^\s*ENV\s+/i.test(line) && secretPattern.test(line)) {
@@ -34,10 +33,8 @@ export function parseDockerfile(content: string) {
 
   const signals: Partial<RepoSignals> = {
     hasDockerfile: true,
-    hasCustomServer: customServer,
     runtime: node20 ? "node20" : "unknown"
   };
 
   return { signals, findings };
 }
-

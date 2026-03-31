@@ -14,17 +14,16 @@ export default async function LandingPage() {
         minHeight: "100vh",
         textAlign: "center"
       }}
-    >
+      >
       <section style={{ maxWidth: 760 }}>
         <div style={{ fontFamily: "monospace", fontSize: 72, fontWeight: 700, marginBottom: 20 }}>
           Shipd
         </div>
-        <h1 style={{ fontSize: 24, lineHeight: 1.4, marginBottom: 20 }}>
-          Point it at your repo. Compare your options. Deploy with confidence.
+        <h1 style={{ fontSize: 24, lineHeight: 1.4, marginBottom: 16 }}>
+          Point it at your repo. Get a deployment plan.
         </h1>
-        <p className="muted" style={{ fontSize: 18, lineHeight: 1.6, marginBottom: 28 }}>
-          Shipd reads deployment-relevant files, compares realistic hosting options, and produces
-          a deployment plan before you touch infrastructure.
+        <p className="muted" style={{ fontSize: 16, lineHeight: 1.6, marginBottom: 24 }}>
+          Reads your config files. No code changes. No installs.
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
           {session?.user ? (
@@ -33,9 +32,16 @@ export default async function LandingPage() {
             <AuthButton redirectTo="/dashboard" />
           )}
         </div>
-        <p className="muted" style={{ marginTop: 18, fontSize: 13 }}>
-          Read-only GitHub access. No code changes. No installs. No secrets stored.
-        </p>
+        <div className="landing-trust-row">
+          <div className="landing-avatars">
+            <span className="landing-avatar landing-avatar-blue">JD</span>
+            <span className="landing-avatar landing-avatar-purple">SK</span>
+            <span className="landing-avatar landing-avatar-green">AM</span>
+            <span className="landing-avatar landing-avatar-amber">RL</span>
+            <span className="landing-avatar landing-avatar-coral">TC</span>
+          </div>
+          <span className="muted">127 developers shipped this week</span>
+        </div>
       </section>
     </main>
   );

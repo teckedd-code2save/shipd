@@ -1,5 +1,5 @@
 import { SiteHeader } from "@/components/layout/site-header";
-import { recommendPlatforms } from "@/server/services/recommendation-service";
+import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 
 export default async function ComparisonPage({
   params
@@ -7,7 +7,8 @@ export default async function ComparisonPage({
   params: Promise<{ repoId: string }>;
 }) {
   const { repoId } = await params;
-  const options = await recommendPlatforms(repoId);
+  const analysis = await getRepositoryAnalysis(repoId);
+  const options = analysis.recommendations;
 
   return (
     <>
@@ -15,7 +16,7 @@ export default async function ComparisonPage({
       <main className="page">
         <h1 style={{ fontSize: 28, marginBottom: 8 }}>Platform comparison</h1>
         <p className="muted" style={{ marginBottom: 24 }}>
-          Neutral comparison for {repoId}
+          Neutral comparison for {analysis.repoId}
         </p>
         <section
           style={{

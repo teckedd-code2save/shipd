@@ -9,23 +9,23 @@ export function DashboardSidebar() {
   ];
 
   return (
-    <aside className="panel" style={{ padding: 20, minHeight: 520 }}>
+    <aside className="panel dashboard-sidebar">
       <div style={{ fontFamily: "monospace", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
         Shipd
       </div>
       <p className="muted" style={{ marginTop: 0, marginBottom: 24, fontSize: 14, lineHeight: 1.6 }}>
-        Decision layer for deployment planning.
+        Read-only deployment intelligence across your GitHub repos.
       </p>
-      <nav style={{ display: "grid", gap: 10 }}>
+      <nav style={{ display: "grid", gap: 10, marginBottom: 18 }}>
         {items.map((item) => (
           <Link
             key={item.label}
             href={item.href}
             style={{
               display: "block",
-              border: "1px solid var(--border)",
-              borderRadius: 14,
-              background: "var(--bg-surface-2)",
+              border: "1px solid rgba(255, 255, 255, 0.06)",
+              borderRadius: 16,
+              background: "rgba(31, 35, 48, 0.72)",
               padding: "14px 16px"
             }}
           >
@@ -36,6 +36,21 @@ export function DashboardSidebar() {
           </Link>
         ))}
       </nav>
+      <div className="dashboard-sidebar-stack">
+        <section className="dashboard-side-card">
+          <div className="dashboard-side-label">Workflow</div>
+          <div className="dashboard-side-title">Connect, scan, compare, decide.</div>
+          <div className="dashboard-side-copy">
+            Start from repos that already have env files, workflows, or platform config. Those produce the most trustworthy plans first.
+          </div>
+        </section>
+        <section className="dashboard-side-card">
+          <div className="dashboard-side-label">Focus</div>
+          <div className="dashboard-side-copy">
+            Use the scanned filter to narrow the list to repos that already have a saved snapshot, then jump into comparison or chat from there.
+          </div>
+        </section>
+      </div>
       <div
         style={{
           marginTop: 24,
