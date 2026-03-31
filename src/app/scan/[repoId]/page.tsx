@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { SiteHeader } from "@/components/layout/site-header";
+import { ArrowLeftIcon, SparklesIcon } from "@/components/ui/icons";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 
 export default async function ScanPage({
@@ -13,6 +16,16 @@ export default async function ScanPage({
     <>
       <SiteHeader />
       <main className="page">
+        <div className="subpage-toolbar">
+          <Link href={`/chat/${repoId}`} className="subpage-back-link">
+            <ArrowLeftIcon size={16} />
+            Back to plan
+          </Link>
+          <div className="subpage-context">
+            <SparklesIcon size={14} />
+            <span>Scan details come from the same saved deployment workspace.</span>
+          </div>
+        </div>
         <h1 style={{ fontSize: 28, marginBottom: 8 }}>Scan results</h1>
         <p className="muted" style={{ marginBottom: 24 }}>
           Full transparency for {analysis.repoId}

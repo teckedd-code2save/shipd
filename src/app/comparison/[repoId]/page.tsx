@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { SiteHeader } from "@/components/layout/site-header";
+import { ArrowLeftIcon } from "@/components/ui/icons";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 import type { RepoSignals } from "@/lib/parsing/types";
 
@@ -7,41 +10,41 @@ function getEvidenceForPlatform(platform: string, signals: RepoSignals) {
 
   if (platform === "Vercel") {
     if (signals.framework === "nextjs") evidence.push("package.json: Next.js");
-    if (signals.platformConfigFiles.find((file) => file.includes("vercel"))) {
+    if (signals.platformConfigFiles?.find((file) => file.includes("vercel"))) {
       evidence.push(signals.platformConfigFiles.find((file) => file.includes("vercel"))!);
     }
-    if (signals.workflowFiles[0] && signals.hasBuildWorkflow) evidence.push(signals.workflowFiles[0]);
+    if (signals.workflowFiles?.[0] && signals.hasBuildWorkflow) evidence.push(signals.workflowFiles[0]);
     if (signals.hasCustomServer) evidence.push("custom runtime entrypoint");
   }
 
   if (platform === "Railway") {
-    if (signals.dockerfilePaths[0]) evidence.push(signals.dockerfilePaths[0]);
-    if (signals.platformConfigFiles.find((file) => file.includes("railway"))) {
+    if (signals.dockerfilePaths?.[0]) evidence.push(signals.dockerfilePaths[0]);
+    if (signals.platformConfigFiles?.find((file) => file.includes("railway"))) {
       evidence.push(signals.platformConfigFiles.find((file) => file.includes("railway"))!);
     }
-    if (signals.envFilePaths[0]) evidence.push(signals.envFilePaths[0]);
+    if (signals.envFilePaths?.[0]) evidence.push(signals.envFilePaths[0]);
     if (signals.hasCustomServer) evidence.push("custom server process");
-    if (signals.infrastructureFiles[0]) evidence.push(signals.infrastructureFiles[0]);
+    if (signals.infrastructureFiles?.[0]) evidence.push(signals.infrastructureFiles[0]);
   }
 
   if (platform === "Fly.io") {
-    if (signals.dockerfilePaths[0]) evidence.push(signals.dockerfilePaths[0]);
-    if (signals.platformConfigFiles.find((file) => file.includes("fly"))) {
+    if (signals.dockerfilePaths?.[0]) evidence.push(signals.dockerfilePaths[0]);
+    if (signals.platformConfigFiles?.find((file) => file.includes("fly"))) {
       evidence.push(signals.platformConfigFiles.find((file) => file.includes("fly"))!);
     }
-    if (signals.infrastructureFiles.find((file) => file.endsWith(".tf"))) {
+    if (signals.infrastructureFiles?.find((file) => file.endsWith(".tf"))) {
       evidence.push(signals.infrastructureFiles.find((file) => file.endsWith(".tf"))!);
     }
     if (signals.hasCustomServer) evidence.push("custom server process");
   }
 
   if (platform === "Render") {
-    if (signals.dockerfilePaths[0]) evidence.push(signals.dockerfilePaths[0]);
-    if (signals.platformConfigFiles.find((file) => file.includes("render"))) {
+    if (signals.dockerfilePaths?.[0]) evidence.push(signals.dockerfilePaths[0]);
+    if (signals.platformConfigFiles?.find((file) => file.includes("render"))) {
       evidence.push(signals.platformConfigFiles.find((file) => file.includes("render"))!);
     }
-    if (signals.envFilePaths[0]) evidence.push(signals.envFilePaths[0]);
-    if (signals.workflowFiles[0]) evidence.push(signals.workflowFiles[0]);
+    if (signals.envFilePaths?.[0]) evidence.push(signals.envFilePaths[0]);
+    if (signals.workflowFiles?.[0]) evidence.push(signals.workflowFiles[0]);
   }
 
   return evidence.slice(0, 4);
@@ -52,9 +55,9 @@ function describeSignals(signals: RepoSignals) {
 
   if (signals.framework && signals.framework !== "unknown") highlights.push(signals.framework);
   if (signals.runtime && signals.runtime !== "unknown") highlights.push(signals.runtime);
-  if (signals.dockerfilePaths[0]) highlights.push(signals.dockerfilePaths[0]);
-  if (signals.infrastructureFiles[0]) highlights.push(signals.infrastructureFiles[0]);
-  if (signals.platformConfigFiles[0]) highlights.push(signals.platformConfigFiles[0]);
+  if (signals.dockerfilePaths?.[0]) highlights.push(signals.dockerfilePaths[0]);
+  if (signals.infrastructureFiles?.[0]) highlights.push(signals.infrastructureFiles[0]);
+  if (signals.platformConfigFiles?.[0]) highlights.push(signals.platformConfigFiles[0]);
 
   return highlights.join(" · ");
 }
@@ -72,6 +75,12 @@ export default async function ComparisonPage({
     <>
       <SiteHeader />
       <main className="page">
+        <div className="subpage-toolbar">
+          <Link href={`/chat/${repoId}`} className="subpage-back-link">
+            <ArrowLeftIcon size={16} />
+            Back to plan
+          </Link>
+        </div>
         <section className="dashboard-hero" style={{ marginBottom: 24 }}>
           <div className="dashboard-hero-kicker">Platform comparison</div>
           <h1 style={{ fontSize: 34, marginTop: 0, marginBottom: 8, letterSpacing: "-0.04em" }}>

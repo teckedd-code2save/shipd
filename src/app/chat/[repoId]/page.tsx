@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { ChatWorkspace } from "@/components/chat/chat-workspace";
-import { ArrowLeftIcon, ChartIcon, FileIcon, GitHubIcon, RefreshIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, ArrowUpRightIcon, ChartIcon, FileIcon, GitHubIcon, RefreshIcon } from "@/components/ui/icons";
+import { getPlatformDocsUrl } from "@/lib/platform-docs";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 import { runRepositoryScanAction } from "@/app/dashboard/actions";
 import { findRepositoryById } from "@/server/services/repository-service";
@@ -16,6 +17,8 @@ export default async function ChatPage({
   const repository = await findRepositoryById(repoId);
   const plan = analysis.plan;
   const repoLabel = repository ? `${repository.owner}/${repository.name}` : analysis.repoId;
+  const topRecommendation = analysis.recommendations[0];
+  const providerDocsUrl = getPlatformDocsUrl(plan.topPlatform, analysis.signals.framework);
 
   return (
     <>
@@ -62,6 +65,23 @@ export default async function ChatPage({
               </div>
 
               <div className="chat-sidebar-section">
+                <div className="chat-sidebar-label">Why Shipd chose {plan.topPlatform}</div>
+                <div className="chat-sidebar-list">
+                  {topRecommendation?.reasons.length ? (
+                    topRecommendation.reasons.map((reason, index) => (
+                      <div key={`${reason}-${index}`} className="chat-sidebar-list-item neutral">
+                        {reason}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="chat-sidebar-list-item neutral">
+                      Specific reasoning will appear here once Shipd has enough repository signals.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="chat-sidebar-section">
                 <div className="chat-sidebar-label">Blockers</div>
                 <div className="chat-sidebar-list">
                   {plan.blockers.length > 0 ? (
@@ -88,6 +108,24 @@ export default async function ChatPage({
                   ) : (
                     <div className="chat-sidebar-list-item neutral">No major warnings detected.</div>
                   )}
+                </div>
+              </div>
+
+              <div className="chat-sidebar-section">
+                <div className="chat-sidebar-label">Resources</div>
+                <div className="chat-sidebar-resource-links">
+                  {repository?.githubUrl ? (
+                    <a href={repository.githubUrl} target="_blank" rel="noreferrer" className="chat-resource-link">
+                      Open project
+                      <ArrowUpRightIcon size={14} />
+                    </a>
+                  ) : null}
+                  {providerDocsUrl ? (
+                    <a href={providerDocsUrl} target="_blank" rel="noreferrer" className="chat-resource-link">
+                      {plan.topPlatform} docs
+                      <ArrowUpRightIcon size={14} />
+                    </a>
+                  ) : null}
                 </div>
               </div>
             </aside>
