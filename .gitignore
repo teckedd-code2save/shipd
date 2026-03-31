@@ -1,0 +1,10 @@
+.next
+node_modules
+.env
+.env.local
+.turbo
+coverage
+dist
+generated
+.vscode
+*.log
