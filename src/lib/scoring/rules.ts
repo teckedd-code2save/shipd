@@ -21,8 +21,11 @@ function confidenceFromSignals(signals: RepoSignals) {
   if (signals.framework !== "unknown") confidence += 0.15;
   if (signals.runtime !== "unknown") confidence += 0.15;
   if (signals.hasCiWorkflow) confidence += 0.1;
+  if (signals.hasBuildWorkflow) confidence += 0.05;
   if (signals.envVars.length > 0) confidence += 0.1;
   if (signals.hasDockerfile) confidence += 0.1;
+  if (signals.hasInfrastructureCode) confidence += 0.05;
+  if (signals.platformConfigFiles.length > 0) confidence += 0.05;
 
   return Math.min(confidence, 0.95);
 }
@@ -38,4 +41,3 @@ export function buildRecommendation(rule: PlatformRule, signals: RepoSignals): P
     reasons: rule.reasons(signals)
   };
 }
-

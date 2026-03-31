@@ -8,12 +8,18 @@ export function detectPlatformConfig(filePath: string): Partial<RepoSignals> {
         ? "fly"
         : filePath === "railway.json"
           ? "railway"
+          : filePath === "render.yaml" || filePath === "render.yml"
+            ? "render"
+            : filePath === "netlify.toml"
+              ? "netlify"
+              : filePath === "wrangler.toml"
+                ? "cloudflare"
           : null;
 
   return detected
     ? {
-        detectedPlatformConfigs: [detected]
+        detectedPlatformConfigs: [detected],
+        platformConfigFiles: [filePath]
       }
     : {};
 }
-

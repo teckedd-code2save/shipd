@@ -25,9 +25,10 @@ export function parseWorkflow(content: string, filePath: string) {
 
   return {
     signals: {
-      hasCiWorkflow: true
+      hasCiWorkflow: true,
+      hasBuildWorkflow: hasBuildStep,
+      workflowFiles: [filePath]
     } satisfies Partial<RepoSignals>,
     findings
   };
 }
-

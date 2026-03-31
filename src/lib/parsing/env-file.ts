@@ -20,9 +20,9 @@ export function parseEnvFile(content: string, filePath = ".env.example") {
 
   return {
     signals: {
-      envVars
+      envVars,
+      envFilePaths: [filePath]
     } satisfies Partial<RepoSignals>,
     findings
   };
 }
-

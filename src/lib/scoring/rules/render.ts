@@ -12,11 +12,14 @@ export const renderRule: PlatformRule = {
     return score;
   },
   reasons(signals: RepoSignals) {
-    const reasons = ["Solid general-purpose fit for web apps."];
-    if (signals.hasDockerfile) reasons.push("Docker-based deploys are supported cleanly.");
+    const reasons = [];
+    if (signals.dockerfilePaths[0]) reasons.push(`${signals.dockerfilePaths[0]} can be deployed directly without major translation.`);
     if (signals.envVars.some((value) => value.includes("DATABASE"))) {
-      reasons.push("Database-backed services can be modeled here without much friction.");
+      reasons.push(`${signals.envFilePaths[0] ?? ".env.example"} contains database variables that fit Render's managed service model.`);
     }
-    return reasons;
+    if (signals.detectedPlatformConfigs.includes("render")) {
+      reasons.push(`${signals.platformConfigFiles.find((file) => file.includes("render")) ?? "render.yaml"} already exists.`);
+    }
+    return reasons.length > 0 ? reasons : ["Render remains a viable general-purpose option for the files detected in this repo."];
   }
 };

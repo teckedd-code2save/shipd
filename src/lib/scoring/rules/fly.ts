@@ -12,12 +12,15 @@ export const flyRule: PlatformRule = {
     return score;
   },
   reasons(signals: RepoSignals) {
-    const reasons = ["Good fit when teams want more infra control."];
-    if (signals.hasDockerfile) reasons.push("Docker support maps well to the repo.");
+    const reasons = [];
+    if (signals.dockerfilePaths[0]) reasons.push(`${signals.dockerfilePaths[0]} makes Fly's container-based deploy path plausible.`);
     if (signals.detectedPlatformConfigs.includes("fly")) {
-      reasons.push("Existing Fly configuration strongly suggests operational fit.");
+      reasons.push(`${signals.platformConfigFiles.find((file) => file.includes("fly")) ?? "fly.toml"} already points toward Fly.io.`);
     }
-    if (signals.hasCustomServer) reasons.push("Custom server workloads fit better here than on serverless-first platforms.");
-    return reasons;
+    if (signals.hasCustomServer) reasons.push("The repo appears to run a custom server process, which fits better here than on serverless-first platforms.");
+    if (signals.infrastructureFiles.some((file) => file.endsWith(".tf"))) {
+      reasons.push(`${signals.infrastructureFiles.find((file) => file.endsWith(".tf"))} suggests the team is comfortable with infra-managed deploy surfaces.`);
+    }
+    return reasons.length > 0 ? reasons : ["This repo has some signals that point to an infra-controlled deployment path."];
   }
 };

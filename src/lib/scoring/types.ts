@@ -5,4 +5,3 @@ export interface PlatformRecommendation {
   verdict: "perfect" | "good" | "viable" | "weak" | "poor";
   reasons: string[];
 }
-

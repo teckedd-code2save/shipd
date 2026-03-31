@@ -3,7 +3,7 @@ import type { ScanFinding } from "@/lib/parsing/shared";
 
 const secretPattern = /(SECRET|TOKEN|KEY|PASSWORD)=/i;
 
-export function parseDockerfile(content: string) {
+export function parseDockerfile(content: string, filePath = "Dockerfile") {
   const findings: ScanFinding[] = [];
   const lines = content.split("\n");
 
@@ -12,7 +12,7 @@ export function parseDockerfile(content: string) {
   lines.forEach((line, index) => {
     if (/^\s*ENV\s+/i.test(line) && secretPattern.test(line)) {
       findings.push({
-        filePath: "Dockerfile",
+        filePath,
         severity: "blocker",
         title: "Secret-like value detected in Dockerfile",
         detail: "Environment data appears to be baked into the image layer.",
@@ -23,8 +23,8 @@ export function parseDockerfile(content: string) {
   });
 
   if (findings.length === 0) {
-    findings.push({
-      filePath: "Dockerfile",
+      findings.push({
+      filePath,
       severity: "ok",
       title: "Dockerfile parsed successfully",
       detail: "No secret-like environment declarations detected."
@@ -33,6 +33,7 @@ export function parseDockerfile(content: string) {
 
   const signals: Partial<RepoSignals> = {
     hasDockerfile: true,
+    dockerfilePaths: [filePath],
     runtime: node20 ? "node20" : "unknown"
   };
 

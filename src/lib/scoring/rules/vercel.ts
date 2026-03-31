@@ -14,12 +14,15 @@ export const vercelRule: PlatformRule = {
     return score;
   },
   reasons(signals: RepoSignals) {
-    const reasons = ["Strong fit for frontend-heavy and standard Next.js deployments."];
-    if (signals.framework === "nextjs") reasons.push("Native Next.js support improves fit.");
+    const reasons = [];
+    if (signals.framework === "nextjs") reasons.push("package.json identifies this as a Next.js app, which is Vercel's strongest path.");
     if (signals.detectedPlatformConfigs.includes("vercel")) {
-      reasons.push("Existing Vercel configuration suggests the repo already leans this way.");
+      reasons.push(`${signals.platformConfigFiles.find((file) => file.includes("vercel")) ?? "vercel.json"} already exists in the repo.`);
     }
-    if (signals.hasCustomServer) reasons.push("Custom server signals weaken fit for this architecture.");
-    return reasons;
+    if (signals.hasCustomServer) reasons.push("The detected custom server entrypoint weakens Vercel fit because it pushes the app away from the standard runtime model.");
+    if (signals.workflowFiles[0] && signals.hasBuildWorkflow) {
+      reasons.push(`${signals.workflowFiles[0]} already includes a build step, which lowers deployment ambiguity for Vercel.`);
+    }
+    return reasons.length > 0 ? reasons : ["Vercel is mainly compelling when the repo looks like a standard Next.js frontend deployment."];
   }
 };

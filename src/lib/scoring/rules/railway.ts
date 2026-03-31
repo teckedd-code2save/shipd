@@ -14,15 +14,20 @@ export const railwayRule: PlatformRule = {
     return score;
   },
   reasons(signals: RepoSignals) {
-    const reasons = ["Strong fit for service-style web apps."];
-    if (signals.hasDockerfile) reasons.push("Docker-native workflow aligns with the repository.");
-    if (signals.hasCustomServer) reasons.push("Custom server support fits the detected architecture.");
+    const reasons = [];
+    if (signals.dockerfilePaths[0]) {
+      reasons.push(`${signals.dockerfilePaths[0]} suggests a container-first deploy flow Railway can absorb cleanly.`);
+    }
+    if (signals.hasCustomServer) reasons.push("The package start command looks like a custom runtime entrypoint rather than a pure serverless app.");
     if (signals.detectedPlatformConfigs.includes("railway")) {
-      reasons.push("Existing Railway configuration increases confidence in fit.");
+      reasons.push(`${signals.platformConfigFiles.find((file) => file.includes("railway")) ?? "railway.json"} already exists in the repo.`);
     }
     if (signals.envVars.some((value) => value.includes("DATABASE"))) {
-      reasons.push("Managed Postgres aligns with detected database signals.");
+      reasons.push(`${signals.envFilePaths[0] ?? ".env.example"} references database variables that map well to Railway services.`);
     }
-    return reasons;
+    if (signals.infrastructureFiles.length > 0) {
+      reasons.push(`${signals.infrastructureFiles[0]} indicates there is already infra-aware deployment context in the repo.`);
+    }
+    return reasons.length > 0 ? reasons : ["Repository signals lean toward a service-style deployment flow rather than a static frontend host."];
   }
 };
