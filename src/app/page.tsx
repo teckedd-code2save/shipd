@@ -16,7 +16,7 @@ export default async function LandingPage() {
       }}
       >
       <section style={{ maxWidth: 760 }}>
-        <div style={{ fontFamily: "monospace", fontSize: 72, fontWeight: 700, marginBottom: 20 }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 72, fontWeight: 700, marginBottom: 20 }}>
           Shipd
         </div>
         <h1 style={{ fontSize: 24, lineHeight: 1.4, marginBottom: 16 }}>

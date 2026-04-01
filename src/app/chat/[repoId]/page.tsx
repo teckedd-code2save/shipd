@@ -40,13 +40,16 @@ export default async function ChatPage({
                 <input type="hidden" name="repoId" value={repoId} />
                 <button type="submit" className="chat-icon-link" aria-label="Run scan">
                   <RefreshIcon size={16} />
+                  Rescan
                 </button>
               </form>
               <Link href={`/comparison/${repoId}`} className="chat-icon-link" aria-label="Compare platforms">
                 <ChartIcon size={16} />
+                Compare
               </Link>
               <Link href={`/scan/${repoId}`} className="chat-icon-link" aria-label="View scan">
                 <FileIcon size={16} />
+                Scan
               </Link>
             </div>
           </header>
