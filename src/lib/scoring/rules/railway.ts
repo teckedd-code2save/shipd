@@ -4,10 +4,12 @@ import type { PlatformRule } from "@/lib/scoring/rules";
 export const railwayRule: PlatformRule = {
   platform: "Railway",
   score(signals: RepoSignals) {
-    let score = 32;
+    let score = 18;
     if (signals.hasDockerfile) score += 24;
     if (signals.hasCustomServer) score += 18;
     if (signals.detectedPlatformConfigs.includes("railway")) score += 14;
+    if (signals.framework === "python") score += 16;
+    if (signals.pythonProjectFiles.length > 0) score += 10;
     if (signals.envVars.some((value) => value.includes("DATABASE"))) score += 8;
     if (signals.envVars.some((value) => value.includes("REDIS"))) score += 8;
     if (signals.framework === "nextjs" && !signals.hasDockerfile && !signals.hasCustomServer) score -= 10;
@@ -21,6 +23,9 @@ export const railwayRule: PlatformRule = {
     if (signals.hasCustomServer) reasons.push("The package start command looks like a custom runtime entrypoint rather than a pure serverless app.");
     if (signals.detectedPlatformConfigs.includes("railway")) {
       reasons.push(`${signals.platformConfigFiles.find((file) => file.includes("railway")) ?? "railway.json"} already exists in the repo.`);
+    }
+    if (signals.pythonProjectFiles[0]) {
+      reasons.push(`${signals.pythonProjectFiles[0]} suggests this repo could run as a Python service on Railway.`);
     }
     if (signals.envVars.some((value) => value.includes("DATABASE"))) {
       reasons.push(`${signals.envFilePaths[0] ?? ".env.example"} references database variables that map well to Railway services.`);

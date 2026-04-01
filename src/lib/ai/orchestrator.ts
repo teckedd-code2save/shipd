@@ -11,20 +11,26 @@ export async function runChatOrchestration(input: ChatMessageInput) {
     ? `${input.context}\n\nUser request: ${input.message}`
     : input.message;
 
-  const object = await adapter.generateObject<DeploymentPlanObject>({
-    provider,
-    schema: deploymentPlanSchema,
-    system:
-      "You are Shipd, a neutral deployment planning tool. Ground every answer in the provided repository context. Do not invent files, configs, or hosting capabilities.",
-    prompt,
-    parse: (value) => deploymentPlanSchema.parse(value)
-  });
+  let object: DeploymentPlanObject | null = null;
+
+  try {
+    object = await adapter.generateObject<DeploymentPlanObject>({
+      provider,
+      schema: deploymentPlanSchema,
+      system:
+        "You are Shipd, a neutral deployment planning tool. Ground every answer in the provided repository context. Do not invent files, configs, or hosting capabilities.",
+      prompt,
+      parse: (value) => deploymentPlanSchema.parse(value)
+    });
+  } catch {
+    object = null;
+  }
 
   const explanation = await adapter.streamText({
     provider,
     system:
       "You are Shipd. Answer briefly and concretely using only the repository context and structured planning results you were given. Be specific about tradeoffs, blockers, and platform fit.",
-    prompt: `${prompt}\n\nStructured plan:\n${JSON.stringify(object)}`
+    prompt: `${prompt}\n\nStructured plan:\n${JSON.stringify(object ?? { note: "Structured output unavailable for this request." })}`
   });
 
   return {

@@ -83,9 +83,13 @@ function createPlanFromSnapshot(findings: ScanFinding[], recommendations: Platfo
     reasons: ["Not enough repository signals were available yet."]
   };
 
+  const lowConfidence = topRecommendation.confidence < 0.3 || topRecommendation.score < 25;
+
   return {
     title: `${topRecommendation.platform} deployment plan`,
-    summary: `${topRecommendation.platform} is currently the best fit for this repository.`,
+    summary: lowConfidence
+      ? `Shipd does not yet have enough deployment evidence to make a strong platform call for this repository. ${topRecommendation.platform} is only a tentative placeholder based on weak signals.`
+      : `${topRecommendation.platform} is currently the best fit for this repository.`,
     topPlatform: topRecommendation.platform,
     score: topRecommendation.score,
     confidence: topRecommendation.confidence,
@@ -96,9 +100,17 @@ function createPlanFromSnapshot(findings: ScanFinding[], recommendations: Platfo
       .filter((finding) => finding.severity === "warning")
       .map((finding) => finding.title),
     nextSteps: [
-      `Create a ${topRecommendation.platform} project`,
-      "Set required environment variables",
-      "Confirm runtime and start command"
+      ...(lowConfidence
+        ? [
+            "Add or confirm deployment-relevant files such as package.json, Dockerfile, pyproject.toml, or platform config",
+            "Confirm the runtime and entrypoint this repo should ship with",
+            "Re-scan once the repo exposes clearer deployment evidence"
+          ]
+        : [
+            `Create a ${topRecommendation.platform} project`,
+            "Set required environment variables",
+            "Confirm runtime and start command"
+          ])
     ]
   };
 }
@@ -139,14 +151,16 @@ async function loadRepositoryFiles(repoId: string) {
     const token = await getCurrentGitHubAccessToken();
 
     if (repository && token) {
-      const files = await loadRepositoryFilesFromGitHub({
-        token,
-        owner: repository.owner,
-        repo: repository.name
-      });
+      try {
+        const files = await loadRepositoryFilesFromGitHub({
+          token,
+          owner: repository.owner,
+          repo: repository.name
+        });
 
-      if (Object.keys(files).length > 0) {
         return files;
+      } catch {
+        // Fall through to local fixture only when live GitHub loading fails entirely.
       }
     }
   }
@@ -228,19 +242,14 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
       ? (plan.planJson as Record<string, unknown>)
       : null;
 
-  return {
-    repoId,
-    signals: scan.summaryJson,
-    findings: scan.findings.map((finding) => ({
-      filePath: finding.filePath,
-      severity: finding.severity as ScanFinding["severity"],
-      title: finding.title,
-      detail: finding.detail,
-      lineNumber: finding.lineNumber ?? undefined,
-      actionText: finding.actionText ?? undefined
-    })),
-    recommendations,
-    plan: plan
+  const storedPlanMatchesLatestScan =
+    Boolean(plan) &&
+    plan?.platform === fallbackPlan.topPlatform &&
+    plan?.score === fallbackPlan.score &&
+    Math.abs((plan?.confidence ?? 0) - fallbackPlan.confidence) < 0.001;
+
+  const hydratedPlan =
+    storedPlanMatchesLatestScan && plan
       ? {
           title: plan.title,
           summary: plan.summary,
@@ -251,7 +260,21 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
           warnings: normalizeStringArray(storedPlanJson?.warnings),
           nextSteps: normalizeStringArray(storedPlanJson?.nextSteps)
         }
-      : fallbackPlan,
+      : fallbackPlan;
+
+  return {
+    repoId,
+    signals: scan.summaryJson,
+    findings: scan.findings.map((finding) => ({
+      filePath: finding.filePath,
+      severity: finding.severity as ScanFinding["severity"],
+      title: finding.title,
+      detail: finding.detail,
+        lineNumber: finding.lineNumber ?? undefined,
+        actionText: finding.actionText ?? undefined
+    })),
+    recommendations,
+    plan: hydratedPlan,
     scannedAt: scan.createdAt.toISOString()
   } satisfies RepositoryAnalysisSnapshot;
 }

@@ -1,6 +1,6 @@
 export interface RepoSignals {
-  framework?: "nextjs" | "express" | "react" | "unknown";
-  runtime?: "node18" | "node20" | "bun" | "unknown";
+  framework?: "nextjs" | "express" | "react" | "python" | "unknown";
+  runtime?: "node18" | "node20" | "bun" | "python" | "unknown";
   hasDockerfile: boolean;
   dockerfilePaths: string[];
   hasCustomServer: boolean;
@@ -14,4 +14,7 @@ export interface RepoSignals {
   infrastructureFiles: string[];
   hasInfrastructureCode: boolean;
   deploymentDescriptorFiles: string[];
+  pythonProjectFiles: string[];
+  notebookFiles: string[];
+  scannedFiles: number;
 }

@@ -4,8 +4,9 @@ import type { PlatformRule } from "@/lib/scoring/rules";
 export const vercelRule: PlatformRule = {
   platform: "Vercel",
   score(signals: RepoSignals) {
-    let score = 34;
+    let score = 20;
     if (signals.framework === "nextjs") score += 38;
+    if (signals.framework === "python") score -= 18;
     if (signals.detectedPlatformConfigs.includes("vercel")) score += 14;
     if (!signals.hasDockerfile && !signals.hasCustomServer && signals.framework === "nextjs") score += 8;
     if (signals.hasCustomServer) score -= 22;
@@ -18,6 +19,9 @@ export const vercelRule: PlatformRule = {
     if (signals.framework === "nextjs") reasons.push("package.json identifies this as a Next.js app, which is Vercel's strongest path.");
     if (signals.detectedPlatformConfigs.includes("vercel")) {
       reasons.push(`${signals.platformConfigFiles.find((file) => file.includes("vercel")) ?? "vercel.json"} already exists in the repo.`);
+    }
+    if (signals.pythonProjectFiles[0]) {
+      reasons.push(`${signals.pythonProjectFiles[0]} points toward a Python app, which is not Vercel's primary fit.`);
     }
     if (signals.hasCustomServer) reasons.push("The detected custom server entrypoint weakens Vercel fit because it pushes the app away from the standard runtime model.");
     if (signals.workflowFiles[0] && signals.hasBuildWorkflow) {

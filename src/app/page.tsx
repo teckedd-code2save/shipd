@@ -9,13 +9,24 @@ export default async function LandingPage() {
     <main
       className="page"
       style={{
-        display: "grid",
-        placeItems: "center",
+        display: "flex",
+        flexDirection: "column",
         minHeight: "100vh",
         textAlign: "center"
       }}
+    >
+      <section
+        style={{
+          maxWidth: 760,
+          flex: 1,
+          display: "grid",
+          placeItems: "center",
+          alignContent: "center",
+          width: "100%",
+          margin: "0 auto"
+        }}
       >
-      <section style={{ maxWidth: 760 }}>
+        <div>
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 72, fontWeight: 700, marginBottom: 20 }}>
           Shipd
         </div>
@@ -32,17 +43,18 @@ export default async function LandingPage() {
             <AuthButton redirectTo="/dashboard" />
           )}
         </div>
-        <div className="landing-trust-row">
-          <div className="landing-avatars">
-            <span className="landing-avatar landing-avatar-blue">JD</span>
-            <span className="landing-avatar landing-avatar-purple">SK</span>
-            <span className="landing-avatar landing-avatar-green">AM</span>
-            <span className="landing-avatar landing-avatar-amber">RL</span>
-            <span className="landing-avatar landing-avatar-coral">TC</span>
-          </div>
-          <span className="muted">127 developers shipped this week</span>
         </div>
       </section>
+      <div className="landing-trust-row">
+        <div className="landing-avatars">
+          <span className="landing-avatar landing-avatar-blue">JD</span>
+          <span className="landing-avatar landing-avatar-purple">SK</span>
+          <span className="landing-avatar landing-avatar-green">AM</span>
+          <span className="landing-avatar landing-avatar-amber">RL</span>
+          <span className="landing-avatar landing-avatar-coral">TC</span>
+        </div>
+        <span className="muted">127 developers shipped this week</span>
+      </div>
     </main>
   );
 }

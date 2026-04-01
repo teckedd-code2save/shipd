@@ -25,6 +25,7 @@ interface ChatBubble {
   id: string;
   role: "assistant" | "user";
   text: string;
+  pending?: boolean;
 }
 
 const quickPrompts = [
@@ -71,6 +72,10 @@ export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceP
           message: userMessage.text
         })
       });
+
+      if (!response.ok) {
+        throw new Error("Chat request failed.");
+      }
 
       const payload = (await response.json()) as { message?: string; plan?: DeploymentPlan };
 
@@ -125,13 +130,40 @@ export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceP
             <div>
               <div className={message.role === "assistant" ? "chat-message-body" : "chat-message-user-bubble"}>
                 {message.text}
+                {message.pending ? (
+                  <span className="chat-thinking-indicator" aria-label="Shipd is responding">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                ) : null}
               </div>
               {message.role === "assistant" ? (
-                <span className="chat-ai-disclaimer">AI-generated · may be inaccurate</span>
+                <span className="chat-ai-disclaimer">
+                  {message.pending ? "Shipd is responding..." : "AI-generated · may be inaccurate"}
+                </span>
               ) : null}
             </div>
           </div>
         ))}
+        {isSubmitting ? (
+          <div className="chat-message chat-message-assistant">
+            <div className="chat-message-avatar">
+              <SparklesIcon size={14} />
+            </div>
+            <div>
+              <div className="chat-message-body">
+                Thinking through your repo context.
+                <span className="chat-thinking-indicator" aria-label="Shipd is responding">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </div>
+              <span className="chat-ai-disclaimer">Shipd is responding...</span>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="chat-prompt-row">
@@ -140,6 +172,7 @@ export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceP
             key={prompt}
             type="button"
             className="chat-quick-prompt"
+            disabled={isSubmitting}
             onClick={() => {
               setInput(prompt);
               void sendMessage(prompt);

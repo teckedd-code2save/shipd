@@ -3,6 +3,7 @@ import { parseEnvFile } from "@/lib/parsing/env-file";
 import { parseInfrastructureFile } from "@/lib/parsing/infrastructure";
 import { parsePackageJson } from "@/lib/parsing/package-json";
 import { detectPlatformConfig } from "@/lib/parsing/platform-config";
+import { parseNotebookFile, parsePythonProject } from "@/lib/parsing/python-project";
 import { parseReadme } from "@/lib/parsing/readme";
 import { parseWorkflow } from "@/lib/parsing/workflow";
 import type { RepositoryFileMap, ScanFinding } from "@/lib/parsing/shared";
@@ -28,7 +29,10 @@ function mergeSignals(base: RepoSignals, next: Partial<RepoSignals>): RepoSignal
     hasInfrastructureCode: next.hasInfrastructureCode ?? base.hasInfrastructureCode,
     deploymentDescriptorFiles: Array.from(
       new Set([...base.deploymentDescriptorFiles, ...(next.deploymentDescriptorFiles ?? [])])
-    )
+    ),
+    pythonProjectFiles: Array.from(new Set([...base.pythonProjectFiles, ...(next.pythonProjectFiles ?? [])])),
+    notebookFiles: Array.from(new Set([...base.notebookFiles, ...(next.notebookFiles ?? [])])),
+    scannedFiles: Math.max(base.scannedFiles, next.scannedFiles ?? base.scannedFiles)
   };
 }
 
@@ -48,7 +52,10 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
     platformConfigFiles: [],
     infrastructureFiles: [],
     hasInfrastructureCode: false,
-    deploymentDescriptorFiles: []
+    deploymentDescriptorFiles: [],
+    pythonProjectFiles: [],
+    notebookFiles: [],
+    scannedFiles: Object.keys(files).length
   };
 
   const findings: ScanFinding[] = [];
@@ -70,6 +77,26 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
 
     if (filePath === ".env.example" || filePath.endsWith(".env.example") || filePath.endsWith(".env.sample")) {
       const result = parseEnvFile(content, filePath);
+      signals = mergeSignals(signals, result.signals);
+      findings.push(...result.findings);
+      continue;
+    }
+
+    if (
+      filePath === "pyproject.toml" ||
+      filePath === "requirements.txt" ||
+      filePath === "Pipfile" ||
+      filePath === "setup.py" ||
+      filePath === "environment.yml"
+    ) {
+      const result = parsePythonProject(filePath);
+      signals = mergeSignals(signals, result.signals);
+      findings.push(...result.findings);
+      continue;
+    }
+
+    if (filePath.endsWith(".ipynb")) {
+      const result = parseNotebookFile(filePath);
       signals = mergeSignals(signals, result.signals);
       findings.push(...result.findings);
       continue;

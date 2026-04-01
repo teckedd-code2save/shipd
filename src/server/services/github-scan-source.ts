@@ -3,6 +3,11 @@ import type { RepositoryFileMap } from "@/lib/parsing/shared";
 
 const SCAN_TARGETS = [
   "package.json",
+  "pyproject.toml",
+  "requirements.txt",
+  "Pipfile",
+  "setup.py",
+  "environment.yml",
   "Dockerfile",
   ".env.example",
   ".env.sample",
@@ -27,6 +32,7 @@ const SCAN_TARGETS = [
 
 const INFRA_DIRECTORIES = ["infra", "infrastructure", "terraform", "deploy", ".deploy", "k8s", "kubernetes", "helm"] as const;
 const MAX_INFRA_FILES = 40;
+const MAX_NOTEBOOK_FILES = 6;
 
 function isDeploymentRelevantFile(path: string) {
   return (
@@ -112,6 +118,26 @@ export async function loadRepositoryFilesFromGitHub(args: {
       }
     })
   );
+
+  try {
+    const rootEntries = await listRepositoryDirectory(
+      args.token,
+      args.owner,
+      args.repo,
+      "",
+      args.defaultBranch
+    );
+
+    const notebookEntries = rootEntries
+      .filter((entry) => entry.type === "file" && entry.path.endsWith(".ipynb"))
+      .slice(0, MAX_NOTEBOOK_FILES);
+
+    notebookEntries.forEach((entry) => {
+      fileMap[entry.path] = "";
+    });
+  } catch {
+    // Root directory listing may fail on some repositories.
+  }
 
   try {
     const workflowEntries = await listRepositoryDirectory(

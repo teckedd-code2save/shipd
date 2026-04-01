@@ -11,6 +11,27 @@ class TextStreamHandle implements StreamHandle {
 
 interface OpenAIResponsesApiResponse {
   output_text?: string;
+  output?: Array<{
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+}
+
+function getOpenAIText(response: OpenAIResponsesApiResponse) {
+  if (response.output_text) {
+    return response.output_text.trim();
+  }
+
+  const text = response.output
+    ?.flatMap((item) => item.content ?? [])
+    .filter((part) => part.type === "output_text" || part.type === "text")
+    .map((part) => part.text ?? "")
+    .join("\n")
+    .trim();
+
+  return text || null;
 }
 
 async function createOpenAIResponse(input: {
@@ -72,7 +93,7 @@ export class OpenAIAdapter implements ModelAdapter {
       json: true
     });
 
-    const raw = response.output_text;
+    const raw = getOpenAIText(response);
 
     if (!raw) {
       throw new Error("OpenAI returned no structured output.");
@@ -88,10 +109,12 @@ export class OpenAIAdapter implements ModelAdapter {
       prompt: input.prompt
     });
 
-    if (!response.output_text) {
+    const text = getOpenAIText(response);
+
+    if (!text) {
       throw new Error("OpenAI returned no text output.");
     }
 
-    return new TextStreamHandle(response.output_text);
+    return new TextStreamHandle(text);
   }
 }
