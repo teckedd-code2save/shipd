@@ -20,7 +20,6 @@ export default async function DashboardPage() {
           <section style={{ minWidth: 0 }}>
             <section className="dashboard-hero">
               <div>
-                <div className="dashboard-hero-wordmark">Shipd</div>
                 <div className="dashboard-hero-kicker">Deployment planning workspace</div>
                 <h1 style={{ fontSize: 34, marginBottom: 10, marginTop: 0, letterSpacing: "-0.04em" }}>
                   Point it at your repos. Open the right deployment plan fast.

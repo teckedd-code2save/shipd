@@ -41,7 +41,7 @@ export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceP
       text: `${initialPlan.summary} Ask for a recommendation, compare tradeoffs, or request a tighter launch checklist for ${repoLabel}.`
     }
   ]);
-  const [input, setInput] = useState("Where should I deploy?");
+  const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function sendMessage(nextInput?: string) {
@@ -122,8 +122,13 @@ export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceP
                 <SparklesIcon size={14} />
               </div>
             ) : null}
-            <div className={message.role === "assistant" ? "chat-message-body" : "chat-message-user-bubble"}>
-              {message.text}
+            <div>
+              <div className={message.role === "assistant" ? "chat-message-body" : "chat-message-user-bubble"}>
+                {message.text}
+              </div>
+              {message.role === "assistant" ? (
+                <span className="chat-ai-disclaimer">AI-generated · may be inaccurate</span>
+              ) : null}
             </div>
           </div>
         ))}

@@ -103,7 +103,7 @@ export default async function ComparisonPage({
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, gap: 14 }}>
                 <div>
                   <strong style={{ fontSize: 22, letterSpacing: "-0.03em" }}>
-                    {index === 0 ? "★ " : ""}
+                    {index === 0 ? <span aria-hidden="true">★ </span> : ""}
                     {option.platform}
                   </strong>
                   <div className="muted" style={{ marginTop: 6 }}>
