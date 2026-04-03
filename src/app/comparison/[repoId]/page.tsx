@@ -1,57 +1,22 @@
 import Link from "next/link";
 
+import { formatArchetypeLabel } from "@/lib/archetypes/labels";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ArrowLeftIcon } from "@/components/ui/icons";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
-import type { RepoSignals } from "@/lib/parsing/types";
 
-function getEvidenceForPlatform(platform: string, signals: RepoSignals) {
-  const evidence: string[] = [];
-
-  if (platform === "Vercel") {
-    if (signals.framework === "nextjs") evidence.push("package.json: Next.js");
-    if (signals.platformConfigFiles?.find((file) => file.includes("vercel"))) {
-      evidence.push(signals.platformConfigFiles.find((file) => file.includes("vercel"))!);
-    }
-    if (signals.workflowFiles?.[0] && signals.hasBuildWorkflow) evidence.push(signals.workflowFiles[0]);
-    if (signals.hasCustomServer) evidence.push("custom runtime entrypoint");
-  }
-
-  if (platform === "Railway") {
-    if (signals.dockerfilePaths?.[0]) evidence.push(signals.dockerfilePaths[0]);
-    if (signals.platformConfigFiles?.find((file) => file.includes("railway"))) {
-      evidence.push(signals.platformConfigFiles.find((file) => file.includes("railway"))!);
-    }
-    if (signals.envFilePaths?.[0]) evidence.push(signals.envFilePaths[0]);
-    if (signals.hasCustomServer) evidence.push("custom server process");
-    if (signals.infrastructureFiles?.[0]) evidence.push(signals.infrastructureFiles[0]);
-  }
-
-  if (platform === "Fly.io") {
-    if (signals.dockerfilePaths?.[0]) evidence.push(signals.dockerfilePaths[0]);
-    if (signals.platformConfigFiles?.find((file) => file.includes("fly"))) {
-      evidence.push(signals.platformConfigFiles.find((file) => file.includes("fly"))!);
-    }
-    if (signals.infrastructureFiles?.find((file) => file.endsWith(".tf"))) {
-      evidence.push(signals.infrastructureFiles.find((file) => file.endsWith(".tf"))!);
-    }
-    if (signals.hasCustomServer) evidence.push("custom server process");
-  }
-
-  if (platform === "Render") {
-    if (signals.dockerfilePaths?.[0]) evidence.push(signals.dockerfilePaths[0]);
-    if (signals.platformConfigFiles?.find((file) => file.includes("render"))) {
-      evidence.push(signals.platformConfigFiles.find((file) => file.includes("render"))!);
-    }
-    if (signals.envFilePaths?.[0]) evidence.push(signals.envFilePaths[0]);
-    if (signals.workflowFiles?.[0]) evidence.push(signals.workflowFiles[0]);
-  }
-
-  return evidence.slice(0, 4);
+function formatRepoClass(value: string) {
+  return value.replaceAll("_", " ");
 }
 
-function describeSignals(signals: RepoSignals) {
+function formatRoot(value?: string) {
+  if (!value) return "Not selected";
+  return value === "." ? "repo root" : value;
+}
+
+function describeSignals(analysis: Awaited<ReturnType<typeof getRepositoryAnalysis>>) {
   const highlights = [];
+  const { signals } = analysis;
 
   if (signals.framework && signals.framework !== "unknown") highlights.push(signals.framework);
   if (signals.runtime && signals.runtime !== "unknown") highlights.push(signals.runtime);
@@ -87,9 +52,35 @@ export default async function ComparisonPage({
             Compare deployment paths for this specific repo
           </h1>
           <p className="muted" style={{ marginBottom: 0, lineHeight: 1.7 }}>
-            {describeSignals(analysis.signals) || "Repository signals are still limited, so confidence will improve as more deployment files are detected."}
+            {describeSignals(analysis) || "Repository signals are still limited, so confidence will improve as more deployment files are detected."}
           </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <span className="repo-chip">{formatRepoClass(analysis.signals.repoTopology ?? "unknown")}</span>
+            {analysis.signals.primaryAppRoot ? (
+              <span className="repo-chip repo-chip-outline">Primary app: {formatRoot(analysis.signals.primaryAppRoot)}</span>
+            ) : null}
+            <span className="repo-chip repo-chip-outline">Repo class: {formatRepoClass(analysis.classification.repoClass)}</span>
+            <span className="repo-chip">{Math.round(analysis.classification.confidence * 100)}% class confidence</span>
+            {analysis.archetypes[0] ? (
+              <span className="repo-chip repo-chip-outline">
+                Archetype: {formatArchetypeLabel(analysis.archetypes[0].archetype)}
+              </span>
+            ) : null}
+          </div>
         </section>
+        {analysis.classification.repoClass === "insufficient_evidence" ||
+        analysis.classification.repoClass === "notebook_repo" ||
+        analysis.classification.repoClass === "infra_only" ||
+        analysis.classification.repoClass === "library_or_package" ? (
+          <section className="panel" style={{ padding: 18, marginBottom: 18 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Shipd does not have enough evidence for a strong platform call yet.</div>
+            <ul className="comparison-reason-list" style={{ marginBottom: 0 }}>
+              {analysis.classification.reasons.map((reason, index) => (
+                <li key={`class-reason-${index}`}>{reason}</li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <section
           className="comparison-grid"
           style={{
@@ -127,17 +118,33 @@ export default async function ComparisonPage({
                 />
               </div>
               <div className="comparison-evidence">
-                {getEvidenceForPlatform(option.platform, analysis.signals).map((item) => (
+                {option.evidence.map((item) => (
                   <span key={`${option.platform}-${item}`} className="repo-chip repo-chip-outline">
                     {item}
                   </span>
                 ))}
               </div>
+              {option.matchedArchetypes.length ? (
+                <div className="comparison-evidence" style={{ marginTop: 10 }}>
+                  {option.matchedArchetypes.map((item) => (
+                    <span key={`${option.platform}-arch-${item}`} className="repo-chip">
+                      {formatArchetypeLabel(item)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <ul className="comparison-reason-list">
                 {option.reasons.map((reason, reasonIndex) => (
                   <li key={`${option.platform}-${reasonIndex}`}>{reason}</li>
                 ))}
               </ul>
+              {option.disqualifiers.length ? (
+                <ul className="comparison-reason-list" style={{ marginTop: 10, color: "var(--text-muted)" }}>
+                  {option.disqualifiers.map((reason, reasonIndex) => (
+                    <li key={`${option.platform}-dq-${reasonIndex}`}>Constraint: {reason}</li>
+                  ))}
+                </ul>
+              ) : null}
             </article>
           ))}
         </section>

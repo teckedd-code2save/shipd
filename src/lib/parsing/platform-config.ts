@@ -2,17 +2,17 @@ import type { RepoSignals } from "@/lib/parsing/types";
 
 export function detectPlatformConfig(filePath: string): Partial<RepoSignals> {
   const detected =
-    filePath === "vercel.json"
+    filePath.endsWith("vercel.json")
       ? "vercel"
-      : filePath === "fly.toml"
+      : filePath.endsWith("fly.toml")
         ? "fly"
-        : filePath === "railway.json"
+        : filePath.endsWith("railway.json")
           ? "railway"
-          : filePath === "render.yaml" || filePath === "render.yml"
+          : filePath.endsWith("render.yaml") || filePath.endsWith("render.yml")
             ? "render"
-            : filePath === "netlify.toml"
+            : filePath.endsWith("netlify.toml")
               ? "netlify"
-              : filePath === "wrangler.toml"
+              : filePath.endsWith("wrangler.toml")
                 ? "cloudflare"
           : null;
 

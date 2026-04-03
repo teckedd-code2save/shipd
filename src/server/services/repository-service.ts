@@ -6,6 +6,15 @@ import type { GitHubRepositorySummary } from "@/lib/github/types";
 import { auth } from "@/auth";
 import { getCurrentGitHubAccessToken } from "@/server/services/github-account-service";
 
+function readScanSummaryField(summary: unknown, field: string) {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+    return undefined;
+  }
+
+  const value = (summary as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : undefined;
+}
+
 const sampleRepos: GitHubRepositorySummary[] = [
   {
     githubId: "sample-storefront",
@@ -109,15 +118,16 @@ export async function listRepositoriesForDashboard() {
       const lastScan = await prisma.scan.findFirst({
         where: { repositoryId: repo.id },
         orderBy: { createdAt: "desc" },
-        select: { createdAt: true }
-      });
-
-      const topPlan = await prisma.deploymentPlan.findFirst({
-        where: { repositoryId: repo.id },
-        orderBy: { updatedAt: "desc" },
-        select: {
-          platform: true,
-          score: true
+        include: {
+          classification: true,
+          archetypes: {
+            orderBy: { rank: "asc" },
+            take: 1
+          },
+          platformScores: {
+            orderBy: [{ score: "desc" }, { confidence: "desc" }],
+            take: 1
+          }
         }
       });
 
@@ -127,8 +137,14 @@ export async function listRepositoriesForDashboard() {
         name: repo.name,
         fullName: repo.fullName,
         lastScanned: lastScan ? lastScan.createdAt.toISOString() : "Not yet scanned",
-        topPlatform: topPlan?.platform,
-        topScore: topPlan?.score
+        repoTopology: readScanSummaryField(lastScan?.summaryJson, "repoTopology"),
+        primaryAppRoot: readScanSummaryField(lastScan?.summaryJson, "primaryAppRoot"),
+        framework: lastScan?.framework ?? undefined,
+        repoClass: lastScan?.classification?.repoClass ?? undefined,
+        topArchetype: lastScan?.archetypes[0]?.archetype ?? undefined,
+        topPlatform: lastScan?.platformScores[0]?.platform,
+        topScore: lastScan?.platformScores[0]?.score,
+        topConfidence: lastScan?.platformScores[0]?.confidence
       };
     })
   );

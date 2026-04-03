@@ -6,10 +6,14 @@ import { useMemo, useState } from "react";
 import { ArrowUpRightIcon, SearchIcon, SparklesIcon } from "@/components/ui/icons";
 import type { DashboardRepository } from "@/types/repository";
 
-function inferFramework(name: string) {
-  if (name.includes("api")) return "Express";
-  if (name.includes("worker")) return "Worker";
-  return "Next.js";
+function formatLabel(value?: string) {
+  if (!value) return "Unknown";
+  return value.replaceAll("_", " ");
+}
+
+function formatRoot(value?: string) {
+  if (!value) return "Not selected";
+  return value === "." ? "repo root" : value;
 }
 
 function formatLastScanned(value: string) {
@@ -98,7 +102,7 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
         {paginatedRepos.map((repo) => (
           <article key={repo.fullName} className="panel repo-card repo-card-sleek">
             <div className="repo-card-topline">
-              <span className="repo-chip repo-chip-outline">{inferFramework(repo.name)}</span>
+              <span className="repo-chip repo-chip-outline">{formatLabel(repo.framework)}</span>
               <span className={repo.lastScanned === "Not yet scanned" ? "repo-chip" : "repo-chip repo-chip-accent"}>
                 {repo.lastScanned === "Not yet scanned" ? "Awaiting scan" : "Snapshot saved"}
               </span>
@@ -127,12 +131,22 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
               </div>
             </div>
 
+            <div className="repo-meta-line" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {repo.repoTopology ? <span className="repo-chip">{formatLabel(repo.repoTopology)}</span> : null}
+              {repo.primaryAppRoot ? (
+                <span className="repo-chip repo-chip-outline">Primary app: {formatRoot(repo.primaryAppRoot)}</span>
+              ) : null}
+              {repo.repoClass ? <span className="repo-chip repo-chip-outline">{formatLabel(repo.repoClass)}</span> : null}
+              {repo.topArchetype ? <span className="repo-chip">{formatLabel(repo.topArchetype)}</span> : null}
+              {repo.topConfidence ? <span className="repo-chip">{Math.round(repo.topConfidence * 100)}% confidence</span> : null}
+            </div>
+
             <div className="repo-card-footer">
               <div className="repo-card-context">
                 <SparklesIcon size={15} style={{ color: "var(--accent-blue)" }} />
                 <span>
                   {repo.topPlatform
-                    ? `Planning starts from the saved ${repo.topPlatform} snapshot.`
+                    ? `Planning starts from the saved ${repo.topPlatform} recommendation${repo.primaryAppRoot ? ` for ${formatRoot(repo.primaryAppRoot)}` : ""}.`
                     : "Open the deployment workspace to run the first scan and compare options."}
                 </span>
               </div>

@@ -1,6 +1,11 @@
 export interface RepoSignals {
-  framework?: "nextjs" | "express" | "react" | "python" | "unknown";
-  runtime?: "node18" | "node20" | "bun" | "python" | "unknown";
+  repoTopology?: "single_app" | "monorepo" | "infra_only" | "unknown";
+  workspaceRoots: string[];
+  appRoots: string[];
+  primaryAppRoot?: string;
+  dotnetAppType?: "web" | "generic" | "unknown";
+  framework?: "nextjs" | "express" | "react" | "python" | "csharp" | "unknown";
+  runtime?: "node18" | "node20" | "bun" | "python" | "dotnet" | "unknown";
   hasDockerfile: boolean;
   dockerfilePaths: string[];
   hasCustomServer: boolean;
@@ -15,6 +20,7 @@ export interface RepoSignals {
   hasInfrastructureCode: boolean;
   deploymentDescriptorFiles: string[];
   pythonProjectFiles: string[];
+  csharpProjectFiles: string[];
   notebookFiles: string[];
   scannedFiles: number;
 }

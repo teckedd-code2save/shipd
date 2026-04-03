@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/generated/prisma/client";
 
 import { env, hasDatabaseEnv } from "@/lib/env";
 
@@ -11,9 +12,12 @@ function createPrismaClient() {
     throw new Error("DATABASE_URL is required before Prisma can connect.");
   }
 
-  process.env.DATABASE_URL = env.DATABASE_URL;
+  const adapter = new PrismaPg({
+    connectionString: env.DATABASE_URL!
+  });
 
   return new PrismaClient({
+    adapter,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
   });
 }

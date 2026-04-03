@@ -6,5 +6,6 @@ node_modules
 coverage
 dist
 generated
+src/generated/prisma
 .vscode
 *.log

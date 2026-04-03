@@ -2,25 +2,38 @@
   "name": "shipd",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || >=24.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push"
+    "db:migrate": "prisma migrate dev && prisma generate",
+    "db:push": "prisma db push && prisma generate",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.0.0",
     "@auth/prisma-adapter": "^2.10.0",
     "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/openai": "^1.0.0",
-    "@prisma/client": "^6.9.0",
+    "@prisma/client": "^7.0.0",
     "ai": "^3.3.4",
+    "dotenv": "^17.2.2",
     "next": "^16.0.0",
     "next-auth": "^5.0.0-beta.29",
+    "pg": "^8.16.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-c-sharp": "^0.23.1",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -31,7 +44,7 @@
     "eslint": "^9.22.0",
     "eslint-config-next": "^16.0.0",
     "postcss": "^8.5.3",
-    "prisma": "^6.9.0",
+    "prisma": "^7.0.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2"
   }

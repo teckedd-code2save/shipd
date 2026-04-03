@@ -2,10 +2,20 @@ import Link from "next/link";
 
 import { ChatWorkspace } from "@/components/chat/chat-workspace";
 import { ArrowLeftIcon, ArrowUpRightIcon, ChartIcon, FileIcon, GitHubIcon, RefreshIcon } from "@/components/ui/icons";
+import { formatArchetypeLabel } from "@/lib/archetypes/labels";
 import { getPlatformDocsUrl } from "@/lib/platform-docs";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 import { runRepositoryScanAction } from "@/app/dashboard/actions";
 import { findRepositoryById } from "@/server/services/repository-service";
+
+function formatRepoClass(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatRoot(value?: string) {
+  if (!value) return "Not selected";
+  return value === "." ? "repo root" : value;
+}
 
 export default async function ChatPage({
   params
@@ -18,7 +28,13 @@ export default async function ChatPage({
   const plan = analysis.plan;
   const repoLabel = repository ? `${repository.owner}/${repository.name}` : analysis.repoId;
   const topRecommendation = analysis.recommendations[0];
-  const providerDocsUrl = getPlatformDocsUrl(plan.topPlatform, analysis.signals.framework);
+  const lowEvidence =
+    analysis.classification.repoClass === "insufficient_evidence" ||
+    analysis.classification.repoClass === "notebook_repo" ||
+    analysis.classification.repoClass === "infra_only" ||
+    analysis.classification.repoClass === "library_or_package";
+  const providerDocsUrl = lowEvidence ? null : getPlatformDocsUrl(plan.topPlatform, analysis.signals.framework);
+  const topArchetype = analysis.archetypes[0] ?? null;
 
   return (
     <>
@@ -63,15 +79,54 @@ export default async function ChatPage({
               </div>
 
               <div className="chat-sidebar-section">
+                <div className="chat-sidebar-label">Repo class</div>
+                <div className="chat-sidebar-copy">{formatRepoClass(analysis.classification.repoClass)}</div>
+              </div>
+
+              <div className="chat-sidebar-section">
+                <div className="chat-sidebar-label">Repo topology</div>
+                <div className="chat-sidebar-copy">{formatRepoClass(analysis.signals.repoTopology ?? "unknown")}</div>
+              </div>
+
+              {analysis.signals.primaryAppRoot ? (
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-label">Primary app root</div>
+                  <div className="chat-sidebar-copy">{formatRoot(analysis.signals.primaryAppRoot)}</div>
+                </div>
+              ) : null}
+
+              {topArchetype ? (
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-label">Top archetype</div>
+                  <div className="chat-sidebar-copy">
+                    {formatArchetypeLabel(topArchetype.archetype)} · {Math.round(topArchetype.confidence * 100)}%
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="chat-sidebar-section">
                 <div className="chat-sidebar-label">Confidence</div>
                 <div className="chat-sidebar-copy">{Math.round(plan.confidence * 100)}% based on saved repository signals.</div>
               </div>
+
+              {lowEvidence ? (
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-label">Why Shipd is cautious</div>
+                  <div className="chat-sidebar-list">
+                    {analysis.classification.reasons.map((reason, index) => (
+                      <div key={`${reason}-${index}`} className="chat-sidebar-list-item warn">
+                        {reason}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="chat-sidebar-section">
                 <div className="chat-sidebar-label">Why Shipd chose {plan.topPlatform}</div>
                 <div className="chat-sidebar-list">
                   {topRecommendation?.reasons.length ? (
-                    topRecommendation.reasons.map((reason, index) => (
+                    topRecommendation.reasons.map((reason: string, index: number) => (
                       <div key={`${reason}-${index}`} className="chat-sidebar-list-item neutral">
                         {reason}
                       </div>
@@ -81,14 +136,32 @@ export default async function ChatPage({
                       Specific reasoning will appear here once Shipd has enough repository signals.
                     </div>
                   )}
+                  {analysis.signals.primaryAppRoot ? (
+                    <div className="chat-sidebar-list-item neutral">
+                      This plan is based on {formatRoot(analysis.signals.primaryAppRoot)}.
+                    </div>
+                  ) : null}
                 </div>
               </div>
+
+              {topRecommendation?.evidence.length ? (
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-label">Supporting evidence</div>
+                  <div className="chat-sidebar-list">
+                    {topRecommendation.evidence.map((item, index) => (
+                      <div key={`${item}-${index}`} className="chat-sidebar-list-item neutral">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="chat-sidebar-section">
                 <div className="chat-sidebar-label">Blockers</div>
                 <div className="chat-sidebar-list">
-                  {plan.blockers.length > 0 ? (
-                    plan.blockers.map((blocker, index) => (
+                  {plan.blockers.length > 0 || analysis.classification.blockers.length > 0 ? (
+                    [...analysis.classification.blockers, ...plan.blockers].map((blocker, index) => (
                       <div key={`${blocker}-${index}`} className="chat-sidebar-list-item danger">
                         {blocker}
                       </div>
@@ -133,7 +206,15 @@ export default async function ChatPage({
               </div>
             </aside>
 
-            <ChatWorkspace repoId={repoId} initialPlan={plan} repoLabel={repoLabel} />
+            <ChatWorkspace
+              repoId={repoId}
+              initialPlan={plan}
+              repoLabel={repoLabel}
+              repoClass={analysis.classification.repoClass}
+              framework={analysis.signals.framework}
+              runtime={analysis.signals.runtime}
+              primaryAppRoot={analysis.signals.primaryAppRoot}
+            />
           </div>
         </section>
       </main>

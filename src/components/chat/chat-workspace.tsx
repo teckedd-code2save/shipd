@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { SendIcon, SparklesIcon } from "@/components/ui/icons";
 
@@ -19,6 +19,10 @@ interface ChatWorkspaceProps {
   repoId: string;
   repoLabel: string;
   initialPlan: DeploymentPlan;
+  repoClass?: string;
+  framework?: string;
+  runtime?: string;
+  primaryAppRoot?: string;
 }
 
 interface ChatBubble {
@@ -28,22 +32,117 @@ interface ChatBubble {
   pending?: boolean;
 }
 
-const quickPrompts = [
-  "Where should I deploy?",
-  "Why is this not a Vercel fit?",
-  "Summarize blockers before launch"
-];
+function formatRoot(value?: string) {
+  if (!value) return null;
+  return value === "." ? "the repo root" : value;
+}
 
-export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceProps) {
+function buildLead({
+  repoLabel,
+  initialPlan,
+  repoClass,
+  framework,
+  runtime,
+  primaryAppRoot
+}: ChatWorkspaceProps) {
+  const rootLabel = formatRoot(primaryAppRoot);
+  const repoClassLabel = (repoClass ?? "unknown").replaceAll("_", " ");
+
+  if (repoClass === "insufficient_evidence" || repoClass === "notebook_repo" || repoClass === "library_or_package") {
+    return `Shipd has not found enough deployment evidence to give ${repoLabel} a strong go-live path yet. I can help narrow the runtime, entrypoint, and platform setup you need next.`;
+  }
+
+  if (framework === "csharp" || runtime === "dotnet") {
+    return `${repoLabel} looks like a .NET service${rootLabel ? ` rooted at ${rootLabel}` : ""}. The fastest path now is to validate the recommended platform, confirm the entrypoint, and generate a clean go-live checklist.`;
+  }
+
+  if (framework === "nextjs") {
+    return `${repoLabel} looks like a Next.js app${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you pick the cleanest deploy path, explain tradeoffs, and get this live quickly.`;
+  }
+
+  if (framework === "python" || repoClass === "python_service") {
+    return `${repoLabel} looks like a Python service${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you choose the right host, confirm the runtime path, and produce a minimal launch checklist.`;
+  }
+
+  return `${initialPlan.summary} I can now focus on the quickest go-live path, platform tradeoffs, and setup steps for ${repoLabel}.`;
+}
+
+function buildQuickPrompts({
+  framework,
+  runtime,
+  initialPlan
+}: Pick<ChatWorkspaceProps, "framework" | "runtime" | "initialPlan">) {
+  if (framework === "csharp" || runtime === "dotnet") {
+    return [
+      `How do I get this live quickly on ${initialPlan.topPlatform}?`,
+      "What .NET runtime settings do I need?",
+      "Give me the shortest launch checklist"
+    ];
+  }
+
+  if (framework === "nextjs") {
+    return [
+      "Where should I deploy this Next.js app?",
+      `How do I go live quickly on ${initialPlan.topPlatform}?`,
+      "What blocks production launch?"
+    ];
+  }
+
+  if (framework === "python" || runtime === "python") {
+    return [
+      `How do I deploy this Python app on ${initialPlan.topPlatform}?`,
+      "What entrypoint is Shipd using?",
+      "Give me a minimal production checklist"
+    ];
+  }
+
+  return [
+    "Where should I deploy?",
+    `How do I go live quickly on ${initialPlan.topPlatform}?`,
+    "Summarize blockers before launch"
+  ];
+}
+
+export function ChatWorkspace(props: ChatWorkspaceProps) {
+  const { repoId, repoLabel, initialPlan, framework, runtime, repoClass, primaryAppRoot } = props;
+  const initialAssistantText = useMemo(
+    () =>
+      buildLead({
+        repoId,
+        repoLabel,
+        initialPlan,
+        framework,
+        runtime,
+        repoClass,
+        primaryAppRoot
+      }),
+    [framework, initialPlan, primaryAppRoot, repoClass, repoId, repoLabel, runtime]
+  );
+  const quickPrompts = useMemo(
+    () => buildQuickPrompts({ framework, runtime, initialPlan }),
+    [framework, runtime, initialPlan]
+  );
   const [messages, setMessages] = useState<ChatBubble[]>([
     {
       id: "initial-assistant",
       role: "assistant",
-      text: `${initialPlan.summary} Ask for a recommendation, compare tradeoffs, or request a tighter launch checklist for ${repoLabel}.`
+      text: initialAssistantText
     }
   ]);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setMessages([
+      {
+        id: "initial-assistant",
+        role: "assistant",
+        text: initialAssistantText
+      }
+    ]);
+    setInput("");
+    setIsSubmitting(false);
+  }, [repoId, initialAssistantText]);
 
   async function sendMessage(nextInput?: string) {
     const value = (nextInput ?? input).trim();
@@ -173,10 +272,10 @@ export function ChatWorkspace({ repoId, repoLabel, initialPlan }: ChatWorkspaceP
             type="button"
             className="chat-quick-prompt"
             disabled={isSubmitting}
-            onClick={() => {
-              setInput(prompt);
-              void sendMessage(prompt);
-            }}
+          onClick={() => {
+            setInput(prompt);
+            void sendMessage(prompt);
+          }}
           >
             {prompt}
           </button>

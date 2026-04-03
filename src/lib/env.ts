@@ -1,3 +1,5 @@
+import "@/config/load-env";
+
 import { z } from "zod";
 
 const envSchema = z.object({

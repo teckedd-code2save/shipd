@@ -3,11 +3,22 @@ import type { RepositoryFileMap } from "@/lib/parsing/shared";
 
 const SCAN_TARGETS = [
   "package.json",
+  "turbo.json",
+  "pnpm-workspace.yaml",
+  "pnpm-workspace.yml",
+  "nx.json",
+  "*.csproj",
   "pyproject.toml",
   "requirements.txt",
   "Pipfile",
   "setup.py",
   "environment.yml",
+  "main.py",
+  "app.py",
+  "wsgi.py",
+  "asgi.py",
+  "manage.py",
+  "Program.cs",
   "Dockerfile",
   ".env.example",
   ".env.sample",
@@ -30,9 +41,45 @@ const SCAN_TARGETS = [
   "tsconfig.json"
 ] as const;
 
+const WORKSPACE_DIRECTORIES = ["apps", "packages", "services", "sites"] as const;
 const INFRA_DIRECTORIES = ["infra", "infrastructure", "terraform", "deploy", ".deploy", "k8s", "kubernetes", "helm"] as const;
 const MAX_INFRA_FILES = 40;
 const MAX_NOTEBOOK_FILES = 6;
+const MAX_WORKSPACE_PACKAGES = 16;
+const MAX_SOURCE_FILES = 30;
+
+const WORKSPACE_SCAN_TARGETS = [
+  "package.json",
+  "pyproject.toml",
+  "requirements.txt",
+  "Pipfile",
+  "setup.py",
+  "environment.yml",
+  "main.py",
+  "app.py",
+  "wsgi.py",
+  "asgi.py",
+  "manage.py",
+  "Dockerfile",
+  ".env.example",
+  ".env.sample",
+  "README.md",
+  "vercel.json",
+  "fly.toml",
+  "railway.json",
+  "render.yaml",
+  "render.yml",
+  "netlify.toml",
+  "wrangler.toml",
+  "Procfile",
+  "next.config.js",
+  "next.config.mjs",
+  "next.config.ts",
+  "tsconfig.json"
+] as const;
+
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".cs"] as const;
+const SOURCE_DIRECTORIES = ["src", "app", "pages", "api", "controllers"] as const;
 
 function isDeploymentRelevantFile(path: string) {
   return (
@@ -45,6 +92,10 @@ function isDeploymentRelevantFile(path: string) {
     path.endsWith(".env.example") ||
     path.endsWith(".env.sample")
   );
+}
+
+function isSourceFile(path: string) {
+  return SOURCE_EXTENSIONS.some((extension) => path.endsWith(extension));
 }
 
 async function walkDirectory(args: {
@@ -83,6 +134,53 @@ async function walkDirectory(args: {
 
     if (entry.type === "dir") {
       await walkDirectory({
+        ...args,
+        path: entry.path,
+        depth: depth + 1,
+        collected
+      });
+    }
+  }
+
+  return collected;
+}
+
+async function collectSourceFiles(args: {
+  token: string;
+  owner: string;
+  repo: string;
+  path: string;
+  defaultBranch?: string;
+  depth?: number;
+  collected?: string[];
+}) {
+  const collected = args.collected ?? [];
+  const depth = args.depth ?? 0;
+
+  if (depth > 2 || collected.length >= MAX_SOURCE_FILES) {
+    return collected;
+  }
+
+  const entries = await listRepositoryDirectory(
+    args.token,
+    args.owner,
+    args.repo,
+    args.path,
+    args.defaultBranch
+  );
+
+  for (const entry of entries) {
+    if (collected.length >= MAX_SOURCE_FILES) {
+      break;
+    }
+
+    if (entry.type === "file" && isSourceFile(entry.path)) {
+      collected.push(entry.path);
+      continue;
+    }
+
+    if (entry.type === "dir" && SOURCE_DIRECTORIES.includes(entry.name as (typeof SOURCE_DIRECTORIES)[number])) {
+      await collectSourceFiles({
         ...args,
         path: entry.path,
         depth: depth + 1,
@@ -135,6 +233,103 @@ export async function loadRepositoryFilesFromGitHub(args: {
     notebookEntries.forEach((entry) => {
       fileMap[entry.path] = "";
     });
+
+    const rootSourceFiles = await collectSourceFiles({
+      token: args.token,
+      owner: args.owner,
+      repo: args.repo,
+      path: "",
+      defaultBranch: args.defaultBranch
+    });
+
+    await Promise.all(
+      rootSourceFiles.map(async (path) => {
+        if (fileMap[path]) {
+          return;
+        }
+
+        try {
+          const file = await getRepositoryFile(
+            args.token,
+            args.owner,
+            args.repo,
+            path,
+            args.defaultBranch
+          );
+          fileMap[file.path] = file.content;
+        } catch {
+          // Source files are best-effort.
+        }
+      })
+    );
+
+    const workspaceDirectories = rootEntries
+      .filter((entry) => entry.type === "dir" && WORKSPACE_DIRECTORIES.includes(entry.name as (typeof WORKSPACE_DIRECTORIES)[number]))
+      .map((entry) => entry.path);
+
+    for (const directory of workspaceDirectories) {
+      const packageEntries = await listRepositoryDirectory(
+        args.token,
+        args.owner,
+        args.repo,
+        directory,
+        args.defaultBranch
+      );
+
+      const workspacePackages = packageEntries
+        .filter((entry) => entry.type === "dir")
+        .slice(0, MAX_WORKSPACE_PACKAGES);
+
+      await Promise.all(
+        workspacePackages.flatMap((pkg) =>
+          WORKSPACE_SCAN_TARGETS.map(async (target) => {
+            const path = `${pkg.path}/${target}`;
+
+            try {
+              const file = await getRepositoryFile(
+                args.token,
+                args.owner,
+                args.repo,
+                path,
+                args.defaultBranch
+              );
+              fileMap[file.path] = file.content;
+            } catch {
+              // Nested workspace files are best-effort.
+            }
+          })
+        )
+      );
+
+      const nestedSourceFiles = await collectSourceFiles({
+        token: args.token,
+        owner: args.owner,
+        repo: args.repo,
+        path: directory,
+        defaultBranch: args.defaultBranch
+      });
+
+      await Promise.all(
+        nestedSourceFiles.map(async (path) => {
+          if (fileMap[path]) {
+            return;
+          }
+
+          try {
+            const file = await getRepositoryFile(
+              args.token,
+              args.owner,
+              args.repo,
+              path,
+              args.defaultBranch
+            );
+            fileMap[file.path] = file.content;
+          } catch {
+            // Source files are best-effort.
+          }
+        })
+      );
+    }
   } catch {
     // Root directory listing may fail on some repositories.
   }

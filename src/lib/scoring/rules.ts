@@ -1,29 +1,41 @@
-import type { RepoSignals } from "@/lib/parsing/types";
-import type { PlatformRecommendation } from "@/lib/scoring/types";
+import type { RepoClass } from "@/lib/classification/types";
+import type { PlatformRecommendation, ScoringContext } from "@/lib/scoring/types";
 
 export interface PlatformRule {
   platform: string;
-  score: (signals: RepoSignals) => number;
-  reasons: (signals: RepoSignals) => string[];
+  score: (context: ScoringContext) => number;
+  reasons: (context: ScoringContext) => string[];
+  evidence?: (context: ScoringContext) => string[];
+  disqualifiers?: (context: ScoringContext) => string[];
 }
 
-function deploymentEvidenceCount(signals: RepoSignals) {
-  let evidence = 0;
+const LOW_EVIDENCE_REPO_CLASSES: RepoClass[] = [
+  "insufficient_evidence",
+  "notebook_repo",
+  "infra_only",
+  "library_or_package"
+];
 
-  if (signals.framework && signals.framework !== "unknown") evidence += 1;
-  if (signals.runtime && signals.runtime !== "unknown") evidence += 1;
-  if (signals.hasDockerfile) evidence += 2;
-  if (signals.hasCiWorkflow) evidence += 1;
-  if (signals.hasBuildWorkflow) evidence += 1;
-  if (signals.envVars.length > 0) evidence += 1;
-  if (signals.platformConfigFiles.length > 0) evidence += 2;
-  if (signals.hasInfrastructureCode) evidence += 2;
-  if (signals.pythonProjectFiles.length > 0) evidence += 1;
+function deploymentEvidenceCount(context: ScoringContext) {
+  const { signals, evidence } = context;
+  let score = 0;
 
-  return evidence;
+  if (signals.framework && signals.framework !== "unknown") score += 1;
+  if (signals.runtime && signals.runtime !== "unknown") score += 1;
+  if (signals.hasDockerfile) score += 2;
+  if (signals.hasCiWorkflow) score += 1;
+  if (signals.hasBuildWorkflow) score += 1;
+  if (signals.envVars.length > 0) score += 1;
+  if (signals.platformConfigFiles.length > 0) score += 2;
+  if (signals.hasInfrastructureCode) score += 2;
+  if (signals.pythonProjectFiles.length > 0) score += 1;
+  score += Math.min(3, evidence.length / 4);
+
+  return score;
 }
 
-function hasNotebookOnlyProfile(signals: RepoSignals) {
+function hasNotebookOnlyProfile(context: ScoringContext) {
+  const { signals } = context;
   return (
     signals.notebookFiles.length > 0 &&
     signals.pythonProjectFiles.length === 0 &&
@@ -36,8 +48,8 @@ function hasNotebookOnlyProfile(signals: RepoSignals) {
   );
 }
 
-function hasInsufficientEvidence(signals: RepoSignals) {
-  return deploymentEvidenceCount(signals) < 2;
+function hasInsufficientEvidence(context: ScoringContext) {
+  return LOW_EVIDENCE_REPO_CLASSES.includes(context.classification.repoClass) || deploymentEvidenceCount(context) < 2;
 }
 
 function verdictFromScore(score: number): PlatformRecommendation["verdict"] {
@@ -48,39 +60,62 @@ function verdictFromScore(score: number): PlatformRecommendation["verdict"] {
   return "poor";
 }
 
-function confidenceFromSignals(signals: RepoSignals) {
-  if (hasNotebookOnlyProfile(signals)) {
+function confidenceFromContext(context: ScoringContext) {
+  const { classification, archetypes } = context;
+
+  if (hasNotebookOnlyProfile(context)) {
     return 0.12;
   }
 
-  let confidence = 0.08;
+  const evidenceStrength = Math.min(1, deploymentEvidenceCount(context) / 8);
+  const topArchetypeConfidence = archetypes[0]?.confidence ?? 0;
+  const confidence =
+    classification.confidence * 0.45 + topArchetypeConfidence * 0.35 + evidenceStrength * 0.2;
 
-  if (signals.framework !== "unknown") confidence += 0.15;
-  if (signals.runtime !== "unknown") confidence += 0.15;
-  if (signals.hasCiWorkflow) confidence += 0.1;
-  if (signals.hasBuildWorkflow) confidence += 0.05;
-  if (signals.envVars.length > 0) confidence += 0.1;
-  if (signals.hasDockerfile) confidence += 0.1;
-  if (signals.hasInfrastructureCode) confidence += 0.05;
-  if (signals.platformConfigFiles.length > 0) confidence += 0.05;
-  if (signals.pythonProjectFiles.length > 0) confidence += 0.08;
+  if (LOW_EVIDENCE_REPO_CLASSES.includes(classification.repoClass)) {
+    return Math.min(confidence, 0.34);
+  }
 
-  return Math.min(confidence, 0.95);
+  return Math.min(Math.max(confidence, 0.08), 0.95);
 }
 
-export function buildRecommendation(rule: PlatformRule, signals: RepoSignals): PlatformRecommendation {
-  const notebookOnly = hasNotebookOnlyProfile(signals);
-  const insufficientEvidence = hasInsufficientEvidence(signals);
-  let score = Math.max(0, Math.min(100, rule.score(signals)));
-  let confidence = confidenceFromSignals(signals);
-  let reasons = rule.reasons(signals);
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+export function getTopArchetype(context: ScoringContext) {
+  return context.archetypes[0] ?? null;
+}
+
+export function hasArchetype(context: ScoringContext, archetype: string) {
+  return context.archetypes.some((match) => match.archetype === archetype && match.confidence >= 0.45);
+}
+
+export function hasRepoClass(context: ScoringContext, repoClass: RepoClass) {
+  return context.classification.repoClass === repoClass;
+}
+
+export function buildRecommendation(rule: PlatformRule, context: ScoringContext): PlatformRecommendation {
+  const notebookOnly = hasNotebookOnlyProfile(context);
+  const insufficientEvidence = hasInsufficientEvidence(context);
+  let score = Math.max(0, Math.min(100, rule.score(context)));
+  let confidence = confidenceFromContext(context);
+  let reasons = uniqueStrings(rule.reasons(context));
+  let evidence = uniqueStrings(rule.evidence?.(context) ?? []);
+  let disqualifiers = uniqueStrings(rule.disqualifiers?.(context) ?? []);
+  const matchedArchetypes = context.archetypes
+    .filter((match) => match.confidence >= 0.45)
+    .map((match) => match.archetype)
+    .slice(0, 3);
 
   if (notebookOnly) {
     score = Math.min(score, 10);
     confidence = Math.min(confidence, 0.12);
     reasons = [
       "Shipd only found notebook-style files here, which is not enough to infer a production deployment path.",
-      ...(signals.notebookFiles[0] ? [`${signals.notebookFiles[0]} looks exploratory rather than deployable.`] : [])
+      ...(context.signals.notebookFiles[0]
+        ? [`${context.signals.notebookFiles[0]} looks exploratory rather than deployable.`]
+        : [])
     ];
   } else if (insufficientEvidence) {
     score = Math.min(score, 22);
@@ -96,6 +131,9 @@ export function buildRecommendation(rule: PlatformRule, signals: RepoSignals): P
     score,
     confidence,
     verdict: verdictFromScore(score),
-    reasons
+    reasons,
+    matchedArchetypes,
+    evidence,
+    disqualifiers
   };
 }

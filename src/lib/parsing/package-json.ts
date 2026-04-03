@@ -1,7 +1,7 @@
 import type { RepoSignals } from "@/lib/parsing/types";
 import type { ScanFinding } from "@/lib/parsing/shared";
 
-export function parsePackageJson(content: string) {
+export function parsePackageJson(content: string, filePath = "package.json") {
   const findings: ScanFinding[] = [];
 
   try {
@@ -10,6 +10,7 @@ export function parsePackageJson(content: string) {
       devDependencies?: Record<string, string>;
       engines?: Record<string, string>;
       scripts?: Record<string, string>;
+      workspaces?: string[] | { packages?: string[] };
     };
 
     const dependencies = {
@@ -39,15 +40,33 @@ export function parsePackageJson(content: string) {
     };
 
     findings.push({
-      filePath: "package.json",
+      filePath,
       severity: "ok",
       title: "Parsed package metadata",
       detail: `Detected framework: ${signals.framework ?? "unknown"}.`
     });
 
+    const workspacePackages = Array.isArray(parsed.workspaces)
+      ? parsed.workspaces
+      : Array.isArray(parsed.workspaces?.packages)
+        ? parsed.workspaces.packages
+        : [];
+
+    if (workspacePackages.length > 0 || dependencies.turbo) {
+      findings.push({
+        filePath,
+        severity: "info",
+        title: "Workspace package manifest detected",
+        detail:
+          filePath === "package.json"
+            ? "The root package manifest looks like a workspace or monorepo shell."
+            : "This package manifest is part of a workspace layout."
+      });
+    }
+
     if (!parsed.scripts?.build) {
       findings.push({
-        filePath: "package.json",
+        filePath,
         severity: "warning",
         title: "Build script missing",
         detail: "No explicit build script detected in package.json.",
@@ -57,7 +76,7 @@ export function parsePackageJson(content: string) {
 
     if (customServer) {
       findings.push({
-        filePath: "package.json",
+        filePath,
         severity: "info",
         title: "Custom server entrypoint detected",
         detail: "The start script appears to launch a custom runtime entrypoint."
@@ -70,7 +89,7 @@ export function parsePackageJson(content: string) {
       signals: {},
       findings: [
         {
-          filePath: "package.json",
+          filePath,
           severity: "warning",
           title: "package.json could not be parsed",
           detail: "JSON parsing failed during repository analysis."

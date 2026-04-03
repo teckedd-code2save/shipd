@@ -1,6 +1,10 @@
-import { Prisma, type PlatformScore as PersistedPlatformScore } from "@prisma/client";
+import { Prisma, type PlatformScore as PersistedPlatformScore } from "@/generated/prisma/client";
 
-import type { ScanFinding } from "@/lib/parsing/shared";
+import { matchArchetypes } from "@/lib/archetypes/match-archetypes";
+import type { ArchetypeMatchResult } from "@/lib/archetypes/types";
+import { classifyRepository } from "@/lib/classification/classify-repository";
+import type { RepoClassificationResult } from "@/lib/classification/types";
+import type { EvidenceRecord, ScanFinding } from "@/lib/parsing/shared";
 import { scanRepositoryFiles } from "@/lib/parsing/scan-repository";
 import type { RepositoryFileMap } from "@/lib/parsing/shared";
 import type { RepoSignals } from "@/lib/parsing/types";
@@ -27,11 +31,25 @@ export interface DeploymentPlanSnapshot {
 export interface RepositoryAnalysisSnapshot {
   repoId: string;
   signals: RepoSignals;
+  evidence: EvidenceRecord[];
+  classification: RepoClassificationResult;
+  archetypes: ArchetypeMatchResult[];
   findings: ScanFinding[];
   recommendations: PlatformRecommendation[];
   plan: DeploymentPlanSnapshot;
+  recommendationVersion: string;
   scannedAt?: string;
 }
+
+const ACTIVE_RECOMMENDATION_VERSION = {
+  label: "v2-deterministic-initial",
+  extractorVersion: "2.0.0",
+  classifierVersion: "2.0.0",
+  archetypeVersion: "2.0.0",
+  mappingVersion: "2.0.0",
+  guideVersion: "2.0.0",
+  aiVersion: "2.0.0"
+} as const;
 
 function loadRepositoryFixture(_repoId: string): RepositoryFileMap {
   return {
@@ -74,7 +92,13 @@ jobs:
   };
 }
 
-function createPlanFromSnapshot(findings: ScanFinding[], recommendations: PlatformRecommendation[]) {
+function createPlanFromSnapshot(
+  findings: ScanFinding[],
+  recommendations: PlatformRecommendation[],
+  classification: RepoClassificationResult,
+  archetypes: ArchetypeMatchResult[],
+  signals?: RepoSignals
+) {
   const topRecommendation = recommendations[0] ?? {
     platform: "Unknown",
     score: 0,
@@ -83,13 +107,25 @@ function createPlanFromSnapshot(findings: ScanFinding[], recommendations: Platfo
     reasons: ["Not enough repository signals were available yet."]
   };
 
-  const lowConfidence = topRecommendation.confidence < 0.3 || topRecommendation.score < 25;
+  const lowConfidence =
+    classification.repoClass === "insufficient_evidence" ||
+    classification.repoClass === "notebook_repo" ||
+    classification.repoClass === "infra_only" ||
+    classification.repoClass === "library_or_package" ||
+    topRecommendation.confidence < 0.3 ||
+    topRecommendation.score < 25;
 
   return {
     title: `${topRecommendation.platform} deployment plan`,
     summary: lowConfidence
-      ? `Shipd does not yet have enough deployment evidence to make a strong platform call for this repository. ${topRecommendation.platform} is only a tentative placeholder based on weak signals.`
-      : `${topRecommendation.platform} is currently the best fit for this repository.`,
+      ? `Shipd does not yet have enough deployment evidence to make a strong platform call for this repository. Repo class: ${classification.repoClass.replaceAll("_", " ")}. ${topRecommendation.platform} is only a tentative placeholder based on weak signals.`
+      : `${topRecommendation.platform} is currently the best fit for this repository${
+          archetypes[0] && archetypes[0].confidence >= 0.55
+            ? ` because Shipd matched it to the ${archetypes[0].archetype.replaceAll("_", " ")} archetype.`
+            : signals?.framework && signals.framework !== "unknown"
+              ? ` because Shipd detected a ${signals.framework} ${signals.primaryAppRoot ? `app rooted at ${signals.primaryAppRoot === "." ? "the repo root" : signals.primaryAppRoot}` : "application"} with a service-style deployment path.`
+              : "."
+        }`,
     topPlatform: topRecommendation.platform,
     score: topRecommendation.score,
     confidence: topRecommendation.confidence,
@@ -135,13 +171,114 @@ function normalizeStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
+function normalizeRepoSignals(value: RepoSignals): RepoSignals {
+  return {
+    repoTopology: value.repoTopology ?? "unknown",
+    workspaceRoots: normalizeStringArray(value.workspaceRoots),
+    appRoots: normalizeStringArray(value.appRoots),
+    primaryAppRoot: typeof value.primaryAppRoot === "string" ? value.primaryAppRoot : undefined,
+    dotnetAppType: value.dotnetAppType ?? "unknown",
+    framework: value.framework ?? "unknown",
+    runtime: value.runtime ?? "unknown",
+    hasDockerfile: Boolean(value.hasDockerfile),
+    dockerfilePaths: normalizeStringArray(value.dockerfilePaths),
+    hasCustomServer: Boolean(value.hasCustomServer),
+    envVars: normalizeStringArray(value.envVars),
+    envFilePaths: normalizeStringArray(value.envFilePaths),
+    hasCiWorkflow: Boolean(value.hasCiWorkflow),
+    hasBuildWorkflow: Boolean(value.hasBuildWorkflow),
+    workflowFiles: normalizeStringArray(value.workflowFiles),
+    detectedPlatformConfigs: normalizeStringArray(value.detectedPlatformConfigs),
+    platformConfigFiles: normalizeStringArray(value.platformConfigFiles),
+    infrastructureFiles: normalizeStringArray(value.infrastructureFiles),
+    hasInfrastructureCode: Boolean(value.hasInfrastructureCode),
+    deploymentDescriptorFiles: normalizeStringArray(value.deploymentDescriptorFiles),
+    pythonProjectFiles: normalizeStringArray(value.pythonProjectFiles),
+    csharpProjectFiles: normalizeStringArray(value.csharpProjectFiles),
+    notebookFiles: normalizeStringArray(value.notebookFiles),
+    scannedFiles: typeof value.scannedFiles === "number" ? value.scannedFiles : 0
+  };
+}
+
+function normalizeClassification(value: unknown): RepoClassificationResult | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  if (
+    typeof candidate.repoClass !== "string" ||
+    typeof candidate.confidence !== "number" ||
+    !Array.isArray(candidate.reasons) ||
+    !Array.isArray(candidate.blockers)
+  ) {
+    return null;
+  }
+
+  return {
+    repoClass: candidate.repoClass as RepoClassificationResult["repoClass"],
+    confidence: candidate.confidence,
+    reasons: normalizeStringArray(candidate.reasons),
+    blockers: normalizeStringArray(candidate.blockers)
+  };
+}
+
+async function getActiveRecommendationVersionId() {
+  const prisma = getPrismaClient();
+
+  const active = await prisma.recommendationVersion.upsert({
+    where: {
+      label: ACTIVE_RECOMMENDATION_VERSION.label
+    },
+    update: {
+      ...ACTIVE_RECOMMENDATION_VERSION,
+      isActive: true
+    },
+    create: {
+      ...ACTIVE_RECOMMENDATION_VERSION,
+      isActive: true
+    },
+    select: {
+      id: true,
+      label: true
+    }
+  });
+
+  await prisma.recommendationVersion.updateMany({
+    where: {
+      id: {
+        not: active.id
+      },
+      isActive: true
+    },
+    data: {
+      isActive: false
+    }
+  });
+
+  return active;
+}
+
 function hydratePlatformRecommendation(score: PersistedPlatformScore): PlatformRecommendation {
+  const explanation =
+    score.explanation && typeof score.explanation === "object" && !Array.isArray(score.explanation)
+      ? (score.explanation as Record<string, unknown>)
+      : null;
+  const reasons = explanation ? normalizeStringArray(explanation.reasons) : normalizeStringArray(score.explanation);
+  const matchedArchetypes = explanation ? normalizeStringArray(explanation.matchedArchetypes) : [];
+  const evidence = explanation ? normalizeStringArray(explanation.evidence) : [];
+  const disqualifiers = explanation ? normalizeStringArray(explanation.disqualifiers) : [];
+
   return {
     platform: score.platform,
     score: score.score,
     confidence: score.confidence,
     verdict: score.verdict as PlatformRecommendation["verdict"],
-    reasons: normalizeStringArray(score.explanation)
+    reasons,
+    matchedArchetypes,
+    evidence,
+    disqualifiers
   };
 }
 
@@ -170,16 +307,22 @@ async function loadRepositoryFiles(repoId: string) {
 
 async function computeRepositoryAnalysis(repoId: string): Promise<RepositoryAnalysisSnapshot> {
   const files = await loadRepositoryFiles(repoId);
-  const { signals, findings } = scanRepositoryFiles(files);
-  const recommendations = scorePlatforms(signals);
-  const plan = createPlanFromSnapshot(findings, recommendations);
+  const { signals, findings, evidence } = scanRepositoryFiles(files);
+  const classification = classifyRepository(signals);
+  const archetypes = matchArchetypes({ signals, classification, evidence });
+  const recommendations = scorePlatforms({ signals, classification, evidence, archetypes });
+  const plan = createPlanFromSnapshot(findings, recommendations, classification, archetypes, signals);
 
   return {
     repoId,
     signals,
+    evidence,
+    classification,
+    archetypes,
     findings,
     recommendations,
-    plan
+    plan,
+    recommendationVersion: ACTIVE_RECOMMENDATION_VERSION.label
   };
 }
 
@@ -195,9 +338,25 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
         repositoryId: repoId
       },
       include: {
+        recommendationVersion: {
+          select: {
+            label: true
+          }
+        },
         findings: {
           orderBy: {
             createdAt: "asc"
+          }
+        },
+        evidence: {
+          orderBy: {
+            createdAt: "asc"
+          }
+        },
+        classification: true,
+        archetypes: {
+          orderBy: {
+            rank: "asc"
           }
         },
         platformScores: {
@@ -224,7 +383,48 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
     return null;
   }
 
+  const normalizedSignals = normalizeRepoSignals(scan.summaryJson);
+
   const recommendations = scan.platformScores.map(hydratePlatformRecommendation);
+  const classification =
+    normalizeClassification(
+      scan.classification
+        ? {
+            repoClass: scan.classification.repoClass,
+            confidence: scan.classification.confidence,
+            reasons: scan.classification.reasonsJson,
+            blockers: scan.classification.blockersJson
+          }
+        : null
+    ) ?? classifyRepository(normalizedSignals);
+  const archetypes =
+    scan.archetypes.length > 0
+      ? scan.archetypes.map((match) => ({
+          archetype: match.archetype,
+          rank: match.rank,
+          confidence: match.confidence,
+          reasons: normalizeStringArray(match.reasonsJson),
+          disqualifiers: normalizeStringArray(match.disqualifiersJson)
+        }))
+      : matchArchetypes({
+          signals: normalizedSignals,
+          classification,
+          evidence:
+            scan.evidence.length > 0
+              ? scan.evidence.map((item) => ({
+                  kind: item.kind as EvidenceRecord["kind"],
+                  value: item.value,
+                  sourceFile: item.sourceFile,
+                  sourceLine: item.sourceLine ?? undefined,
+                  confidence: item.confidence,
+                  metadata:
+                    item.metadataJson && typeof item.metadataJson === "object" && !Array.isArray(item.metadataJson)
+                      ? (item.metadataJson as unknown as Record<string, string>)
+                      : undefined
+                }))
+              : []
+        });
+
   const fallbackPlan = createPlanFromSnapshot(
     scan.findings.map((finding) => ({
       filePath: finding.filePath,
@@ -234,7 +434,10 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
       lineNumber: finding.lineNumber ?? undefined,
       actionText: finding.actionText ?? undefined
     })),
-    recommendations
+    recommendations,
+    classification,
+    archetypes,
+    normalizedSignals
   );
 
   const storedPlanJson =
@@ -264,17 +467,34 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
 
   return {
     repoId,
-    signals: scan.summaryJson,
+    signals: normalizedSignals,
+    evidence:
+      scan.evidence.length > 0
+        ? scan.evidence.map((item) => ({
+            kind: item.kind as EvidenceRecord["kind"],
+            value: item.value,
+            sourceFile: item.sourceFile,
+            sourceLine: item.sourceLine ?? undefined,
+            confidence: item.confidence,
+            metadata:
+              item.metadataJson && typeof item.metadataJson === "object" && !Array.isArray(item.metadataJson)
+                ? (item.metadataJson as unknown as Record<string, string>)
+                : undefined
+          }))
+        : [],
+    classification,
+    archetypes,
     findings: scan.findings.map((finding) => ({
       filePath: finding.filePath,
       severity: finding.severity as ScanFinding["severity"],
       title: finding.title,
       detail: finding.detail,
-        lineNumber: finding.lineNumber ?? undefined,
-        actionText: finding.actionText ?? undefined
+      lineNumber: finding.lineNumber ?? undefined,
+      actionText: finding.actionText ?? undefined
     })),
     recommendations,
     plan: hydratedPlan,
+    recommendationVersion: scan.recommendationVersion?.label ?? ACTIVE_RECOMMENDATION_VERSION.label,
     scannedAt: scan.createdAt.toISOString()
   } satisfies RepositoryAnalysisSnapshot;
 }
@@ -291,10 +511,12 @@ async function persistRepositoryAnalysis(snapshot: RepositoryAnalysisSnapshot) {
   }
 
   const prisma = getPrismaClient();
+  const recommendationVersion = await getActiveRecommendationVersionId();
   const persisted = await prisma.$transaction(async (tx) => {
     const scan = await tx.scan.create({
       data: {
         repositoryId: repository.id,
+        recommendationVersionId: recommendationVersion.id,
         status: "completed",
         framework: snapshot.signals.framework === "unknown" ? null : snapshot.signals.framework,
         runtime: snapshot.signals.runtime === "unknown" ? null : snapshot.signals.runtime,
@@ -319,6 +541,30 @@ async function persistRepositoryAnalysis(snapshot: RepositoryAnalysisSnapshot) {
       });
     }
 
+    if (snapshot.evidence.length > 0) {
+      await tx.scanEvidence.createMany({
+        data: snapshot.evidence.map((record) => ({
+          scanId: scan.id,
+          kind: record.kind,
+          value: record.value,
+          sourceFile: record.sourceFile,
+          sourceLine: record.sourceLine ?? null,
+          confidence: record.confidence,
+          metadataJson: record.metadata ? (record.metadata as unknown as Prisma.InputJsonValue) : Prisma.JsonNull
+        }))
+      });
+    }
+
+    await tx.repoClassification.create({
+      data: {
+        scanId: scan.id,
+        repoClass: snapshot.classification.repoClass,
+        confidence: snapshot.classification.confidence,
+        reasonsJson: snapshot.classification.reasons as unknown as Prisma.InputJsonValue,
+        blockersJson: snapshot.classification.blockers as unknown as Prisma.InputJsonValue
+      }
+    });
+
     if (snapshot.recommendations.length > 0) {
       await tx.platformScore.createMany({
         data: snapshot.recommendations.map((recommendation) => ({
@@ -327,7 +573,25 @@ async function persistRepositoryAnalysis(snapshot: RepositoryAnalysisSnapshot) {
           score: recommendation.score,
           verdict: recommendation.verdict,
           confidence: recommendation.confidence,
-          explanation: recommendation.reasons as unknown as Prisma.InputJsonValue
+          explanation: {
+            reasons: recommendation.reasons,
+            matchedArchetypes: recommendation.matchedArchetypes,
+            evidence: recommendation.evidence,
+            disqualifiers: recommendation.disqualifiers
+          } as Prisma.InputJsonValue
+        }))
+      });
+    }
+
+    if (snapshot.archetypes.length > 0) {
+      await tx.archetypeMatch.createMany({
+        data: snapshot.archetypes.map((archetype) => ({
+          scanId: scan.id,
+          archetype: archetype.archetype,
+          rank: archetype.rank,
+          confidence: archetype.confidence,
+          reasonsJson: archetype.reasons as unknown as Prisma.InputJsonValue,
+          disqualifiersJson: archetype.disqualifiers as unknown as Prisma.InputJsonValue
         }))
       });
     }
@@ -356,6 +620,7 @@ async function persistRepositoryAnalysis(snapshot: RepositoryAnalysisSnapshot) {
 
   return {
     ...snapshot,
+    recommendationVersion: recommendationVersion.label,
     scannedAt: persisted.scanCreatedAt.toISOString()
   };
 }

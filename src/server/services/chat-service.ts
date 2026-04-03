@@ -6,6 +6,7 @@ export async function handleChat(repoId: string, message: string) {
   const plan = analysis.plan;
 
   try {
+    const topArchetype = analysis.archetypes[0];
     const orchestration = await runChatOrchestration({
       repoId,
       message,
@@ -13,7 +14,17 @@ export async function handleChat(repoId: string, message: string) {
         `Repository id: ${repoId}`,
         `Top platform: ${plan.topPlatform}`,
         `Plan summary: ${plan.summary}`,
+        `Repo topology: ${analysis.signals.repoTopology ?? "unknown"}`,
+        `Primary app root: ${analysis.signals.primaryAppRoot ?? "unknown"}`,
+        `Repo class: ${analysis.classification.repoClass} (${Math.round(analysis.classification.confidence * 100)}%)`,
+        ...(topArchetype
+          ? [
+              `Top archetype: ${topArchetype.archetype} (${Math.round(topArchetype.confidence * 100)}%)`,
+              `Archetype reasons: ${JSON.stringify(topArchetype.reasons)}`
+            ]
+          : []),
         `Signals: ${JSON.stringify(analysis.signals)}`,
+        `Evidence: ${JSON.stringify(analysis.evidence)}`,
         `Recommendations: ${JSON.stringify(analysis.recommendations)}`,
         `Findings: ${JSON.stringify(analysis.findings)}`
       ].join("\n")

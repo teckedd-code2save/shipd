@@ -1,24 +1,26 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String          @id @default(cuid())
-  name          String?
-  email         String?         @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  repositories  Repository[]
-  exports       ExportArtifact[]
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id                     String                   @id @default(cuid())
+  name                   String?
+  email                  String?                  @unique
+  emailVerified          DateTime?
+  image                  String?
+  accounts               Account[]
+  sessions               Session[]
+  repositories           Repository[]
+  exports                ExportArtifact[]
+  recommendationFeedback RecommendationFeedback[]
+  outcomeEvents          OutcomeEvent[]
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
 }
 
 model Account {
@@ -33,7 +35,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([provider, providerAccountId])
 }
@@ -56,83 +58,192 @@ model VerificationToken {
 }
 
 model Repository {
-  id          String           @id @default(cuid())
-  owner       String
-  name        String
-  fullName    String           @unique
-  githubUrl   String
-  githubId    String?
-  userId      String
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scans       Scan[]
-  plans       DeploymentPlan[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id        String                   @id @default(cuid())
+  owner     String
+  name      String
+  fullName  String                   @unique
+  githubUrl String
+  githubId  String?
+  userId    String
+  user      User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans     Scan[]
+  plans     DeploymentPlan[]
+  feedback  RecommendationFeedback[]
+  outcomes  OutcomeEvent[]
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
 }
 
 model Scan {
-  id              String          @id @default(cuid())
-  repositoryId    String
-  repository      Repository      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  status          String          @default("completed")
-  framework       String?
-  runtime         String?
-  confidence      Float?
-  summaryJson     Json
-  findings        ScanFinding[]
-  platformScores  PlatformScore[]
-  createdAt       DateTime        @default(now())
+  id                      String                   @id @default(cuid())
+  repositoryId            String
+  repository              Repository               @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  recommendationVersionId String?
+  recommendationVersion   RecommendationVersion?   @relation(fields: [recommendationVersionId], references: [id])
+  status                  String                   @default("completed")
+  framework               String?
+  runtime                 String?
+  confidence              Float?
+  summaryJson             Json
+  findings                ScanFinding[]
+  evidence                ScanEvidence[]
+  classification          RepoClassification?
+  archetypes              ArchetypeMatch[]
+  platformScores          PlatformScore[]
+  feedback                RecommendationFeedback[]
+  outcomes                OutcomeEvent[]
+  createdAt               DateTime                 @default(now())
 }
 
 model ScanFinding {
-  id          String   @id @default(cuid())
-  scanId      String
-  scan        Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  filePath    String
-  severity    String
-  title       String
-  detail      String
-  lineNumber  Int?
-  actionType  String?
-  actionText  String?
-  actionUrl   String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  scanId     String
+  scan       Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  filePath   String
+  severity   String
+  title      String
+  detail     String
+  lineNumber Int?
+  actionType String?
+  actionText String?
+  actionUrl  String?
+  createdAt  DateTime @default(now())
 }
 
 model PlatformScore {
-  id           String   @id @default(cuid())
-  scanId       String
-  scan         Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  platform     String
-  score        Int
-  verdict      String
-  confidence   Float
-  explanation  Json
-  createdAt    DateTime @default(now())
-}
-
-model DeploymentPlan {
-  id            String   @id @default(cuid())
-  repositoryId  String
-  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
-  platform      String
-  title         String
-  summary       String
-  score         Int
-  confidence    Float
-  planJson      Json
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-model ExportArtifact {
   id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  format      String
-  repository  String
+  scanId      String
+  scan        Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
   platform    String
-  content     String
+  score       Int
+  verdict     String
+  confidence  Float
+  explanation Json
   createdAt   DateTime @default(now())
 }
 
+model DeploymentPlan {
+  id           String     @id @default(cuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  platform     String
+  title        String
+  summary      String
+  score        Int
+  confidence   Float
+  planJson     Json
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model ExportArtifact {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format     String
+  repository String
+  platform   String
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model RecommendationVersion {
+  id                String                   @id @default(cuid())
+  label             String                   @unique
+  extractorVersion  String
+  classifierVersion String
+  archetypeVersion  String
+  mappingVersion    String
+  guideVersion      String
+  aiVersion         String?
+  isActive          Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  scans             Scan[]
+  feedback          RecommendationFeedback[]
+  outcomes          OutcomeEvent[]
+}
+
+model ScanEvidence {
+  id           String   @id @default(cuid())
+  scanId       String
+  scan         Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  kind         String
+  value        String
+  sourceFile   String
+  sourceLine   Int?
+  confidence   Float
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+
+  @@index([scanId, kind])
+  @@index([sourceFile])
+}
+
+model RepoClassification {
+  id           String   @id @default(cuid())
+  scanId       String   @unique
+  scan         Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  repoClass    String
+  confidence   Float
+  reasonsJson  Json
+  blockersJson Json?
+  createdAt    DateTime @default(now())
+}
+
+model ArchetypeMatch {
+  id                String   @id @default(cuid())
+  scanId            String
+  scan              Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  archetype         String
+  rank              Int
+  confidence        Float
+  reasonsJson       Json
+  disqualifiersJson Json?
+  createdAt         DateTime @default(now())
+
+  @@index([scanId, rank])
+}
+
+model RecommendationFeedback {
+  id                       String                 @id @default(cuid())
+  userId                   String
+  user                     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositoryId             String
+  repository               Repository             @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  scanId                   String
+  scan                     Scan                   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  recommendationVersionId  String?
+  recommendationVersion    RecommendationVersion? @relation(fields: [recommendationVersionId], references: [id])
+  recommendedPlatform      String?
+  chosenPlatform           String?
+  wasRecommendationCorrect Boolean?
+  deploySucceeded          Boolean?
+  correctionType           String?
+  correctedRepoClass       String?
+  correctedFramework       String?
+  correctedRuntime         String?
+  note                     String?
+  createdAt                DateTime               @default(now())
+
+  @@index([repositoryId, createdAt])
+  @@index([scanId])
+}
+
+model OutcomeEvent {
+  id                      String                 @id @default(cuid())
+  userId                  String?
+  user                    User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  repositoryId            String
+  repository              Repository             @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  scanId                  String?
+  scan                    Scan?                  @relation(fields: [scanId], references: [id], onDelete: SetNull)
+  recommendationVersionId String?
+  recommendationVersion   RecommendationVersion? @relation(fields: [recommendationVersionId], references: [id])
+  action                  String
+  platform                String?
+  metadataJson            Json?
+  createdAt               DateTime               @default(now())
+
+  @@index([repositoryId, action, createdAt])
+  @@index([scanId])
+}
