@@ -8,16 +8,30 @@ export const railwayRule: PlatformRule = {
 
     if (hasArchetype(context, "express_postgres_service")) score += 40;
     if (hasArchetype(context, "dotnet_service_app")) score += 28;
+    if (hasArchetype(context, "go_service_app")) score += 36;
+    if (hasArchetype(context, "ruby_service_app")) score += 32;
+    if (hasArchetype(context, "java_service_app")) score += 26;
+    if (hasArchetype(context, "rust_service_app")) score += 24;
+    if (hasArchetype(context, "php_service_app")) score += 24;
     if (hasArchetype(context, "dockerized_service")) score += 18;
     if (hasArchetype(context, "python_service_app")) score += 24;
+    if (hasArchetype(context, "remix_app")) score += 10;
     if (hasRepoClass(context, "service_app")) score += 12;
     if (hasRepoClass(context, "python_service")) score += 10;
     if (signals.framework === "csharp" || signals.runtime === "dotnet") score += 16;
+    if (signals.framework === "go") score += 18;
+    if (signals.framework === "rust") score += 16;
+    if (signals.framework === "ruby") score += 16;
+    if (signals.framework === "java") score += 14;
+    if (signals.framework === "php") score += 14;
     if (signals.hasDockerfile) score += 24;
     if (signals.hasCustomServer) score += 18;
     if (signals.detectedPlatformConfigs.includes("railway")) score += 14;
     if (signals.framework === "python") score += 16;
     if (signals.pythonProjectFiles.length > 0) score += 10;
+    if (signals.goProjectFiles.length > 0) score += 6;
+    if (signals.rubyProjectFiles.length > 0) score += 6;
+    if (signals.javaProjectFiles.length > 0) score += 4;
     if (signals.envVars.some((value) => value.includes("DATABASE"))) score += 8;
     if (signals.envVars.some((value) => value.includes("REDIS"))) score += 8;
     if (signals.framework === "nextjs" && !signals.hasDockerfile && !signals.hasCustomServer) score -= 10;
@@ -35,6 +49,21 @@ export const railwayRule: PlatformRule = {
     if (hasArchetype(context, "dotnet_service_app")) {
       reasons.push("Shipd matched this repo to a .NET service archetype, which Railway can host as a long-running application.");
     }
+    if (hasArchetype(context, "go_service_app")) {
+      reasons.push("Go services map directly to Railway's runtime model with minimal configuration.");
+    }
+    if (hasArchetype(context, "ruby_service_app")) {
+      reasons.push("Ruby service apps run well on Railway's managed environment.");
+    }
+    if (hasArchetype(context, "java_service_app")) {
+      reasons.push("Java applications can deploy to Railway as containerized or buildpack-based services.");
+    }
+    if (hasArchetype(context, "rust_service_app")) {
+      reasons.push("Rust binaries deploy cleanly on Railway's container runtime.");
+    }
+    if (hasArchetype(context, "php_service_app")) {
+      reasons.push("PHP services can be deployed on Railway via Docker or buildpacks.");
+    }
     if (signals.dockerfilePaths[0]) {
       reasons.push(`${signals.dockerfilePaths[0]} suggests a container-first deploy flow Railway can absorb cleanly.`);
     }
@@ -47,6 +76,12 @@ export const railwayRule: PlatformRule = {
     }
     if (signals.csharpProjectFiles[0]) {
       reasons.push(`${signals.csharpProjectFiles[0]} suggests a .NET service deployment Railway can host as a long-running app.`);
+    }
+    if (signals.goProjectFiles[0]) {
+      reasons.push(`${signals.goProjectFiles[0]} identifies a Go project that Railway can run as a service.`);
+    }
+    if (signals.rubyProjectFiles[0]) {
+      reasons.push(`${signals.rubyProjectFiles[0]} identifies a Ruby project Railway can host as a web service.`);
     }
     if (signals.envVars.some((value) => value.includes("DATABASE"))) {
       reasons.push(`${signals.envFilePaths[0] ?? ".env.example"} references database variables that map well to Railway services.`);
@@ -64,7 +99,12 @@ export const railwayRule: PlatformRule = {
         ? [signals.platformConfigFiles.find((file) => file.includes("railway"))!]
         : []),
       ...(signals.envFilePaths[0] ? [signals.envFilePaths[0]] : []),
-      ...(signals.infrastructureFiles[0] ? [signals.infrastructureFiles[0]] : [])
+      ...(signals.infrastructureFiles[0] ? [signals.infrastructureFiles[0]] : []),
+      ...(signals.goProjectFiles[0] ? [signals.goProjectFiles[0]] : []),
+      ...(signals.rubyProjectFiles[0] ? [signals.rubyProjectFiles[0]] : []),
+      ...(signals.javaProjectFiles[0] ? [signals.javaProjectFiles[0]] : []),
+      ...(signals.rustProjectFiles[0] ? [signals.rustProjectFiles[0]] : []),
+      ...(signals.phpProjectFiles[0] ? [signals.phpProjectFiles[0]] : [])
     ];
   },
   disqualifiers(context) {

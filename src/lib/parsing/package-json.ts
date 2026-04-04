@@ -26,11 +26,19 @@ export function parsePackageJson(content: string, filePath = "package.json") {
     const signals: Partial<RepoSignals> = {
       framework: dependencies.next
         ? "nextjs"
-        : dependencies.express
-          ? "express"
-          : dependencies.react
-            ? "react"
-            : "unknown",
+        : dependencies["@sveltejs/kit"]
+          ? "sveltekit"
+          : dependencies.nuxt
+            ? "nuxt"
+            : dependencies["@remix-run/node"] || dependencies["@remix-run/react"] || dependencies["@remix-run/serve"]
+              ? "remix"
+              : dependencies.astro
+                ? "astro"
+                : dependencies.express
+                  ? "express"
+                  : dependencies.react
+                    ? "react"
+                    : "unknown",
       runtime: parsed.engines?.node?.includes("20")
         ? "node20"
         : parsed.engines?.node?.includes("18")

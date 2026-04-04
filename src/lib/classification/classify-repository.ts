@@ -11,9 +11,17 @@ function hasDeploySignals(signals: RepoSignals) {
     signals.workflowFiles.length > 0 ||
     signals.platformConfigFiles.length > 0 ||
     signals.envFilePaths.length > 0 ||
-    signals.pythonProjectFiles.length > 0
+    signals.pythonProjectFiles.length > 0 ||
+    signals.goProjectFiles.length > 0 ||
+    signals.rubyProjectFiles.length > 0 ||
+    signals.javaProjectFiles.length > 0 ||
+    signals.rustProjectFiles.length > 0 ||
+    signals.phpProjectFiles.length > 0
   );
 }
+
+const SSR_FRAMEWORKS = new Set<RepoSignals["framework"]>(["sveltekit", "nuxt", "remix", "astro"]);
+const SERVICE_FRAMEWORKS = new Set<RepoSignals["framework"]>(["go", "rust", "ruby", "java", "php"]);
 
 function hasOnlyNotebookSignals(signals: RepoSignals) {
   return (
@@ -26,6 +34,14 @@ function hasOnlyNotebookSignals(signals: RepoSignals) {
 }
 
 function looksLikeInfraOnly(signals: RepoSignals) {
+  const hasAnyProjectFiles =
+    signals.pythonProjectFiles.length > 0 ||
+    signals.goProjectFiles.length > 0 ||
+    signals.rubyProjectFiles.length > 0 ||
+    signals.javaProjectFiles.length > 0 ||
+    signals.rustProjectFiles.length > 0 ||
+    signals.phpProjectFiles.length > 0;
+
   return (
     signals.hasInfrastructureCode &&
     signals.infrastructureFiles.length > 0 &&
@@ -33,7 +49,7 @@ function looksLikeInfraOnly(signals: RepoSignals) {
     signals.framework === "unknown" &&
     signals.runtime === "unknown" &&
     signals.platformConfigFiles.length === 0 &&
-    signals.pythonProjectFiles.length === 0 &&
+    !hasAnyProjectFiles &&
     signals.appRoots.length === 0
   );
 }
@@ -166,6 +182,78 @@ export function classifyRepository(signals: RepoSignals): RepoClassificationResu
         ...(signals.primaryAppRoot ? [`Shipd selected ${signals.primaryAppRoot === "." ? "the repo root" : signals.primaryAppRoot} as the primary deployable app.`] : []),
         ...(signals.hasDockerfile ? [`${signals.dockerfilePaths[0]} suggests a deployable runtime path.`] : [])
       ],
+      blockers: []
+    };
+  }
+
+  if (signals.framework && SSR_FRAMEWORKS.has(signals.framework)) {
+    const frameworkLabel =
+      signals.framework === "sveltekit"
+        ? "SvelteKit"
+        : signals.framework === "nuxt"
+          ? "Nuxt"
+          : signals.framework === "remix"
+            ? "Remix"
+            : "Astro";
+    return {
+      repoClass: "deployable_web_app",
+      confidence: signals.hasDockerfile || signals.platformConfigFiles.length > 0 ? 0.82 : 0.7,
+      reasons: [
+        `Framework signals identify this repository as a ${frameworkLabel} app.`,
+        ...(signals.primaryAppRoot ? [`Shipd selected ${signals.primaryAppRoot === "." ? "the repo root" : signals.primaryAppRoot} as the primary deployable app.`] : []),
+        ...(signals.hasDockerfile ? [`${signals.dockerfilePaths[0]} suggests a deployable runtime path.`] : [])
+      ],
+      blockers: []
+    };
+  }
+
+  if (signals.framework && SERVICE_FRAMEWORKS.has(signals.framework)) {
+    const hasEntrypoint = signals.deploymentDescriptorFiles.length > 0;
+    const frameworkLabel =
+      signals.framework === "go"
+        ? "Go"
+        : signals.framework === "rust"
+          ? "Rust"
+          : signals.framework === "ruby"
+            ? "Ruby"
+            : signals.framework === "java"
+              ? "Java"
+              : "PHP";
+    const projectFiles =
+      signals.framework === "go"
+        ? signals.goProjectFiles
+        : signals.framework === "rust"
+          ? signals.rustProjectFiles
+          : signals.framework === "ruby"
+            ? signals.rubyProjectFiles
+            : signals.framework === "java"
+              ? signals.javaProjectFiles
+              : signals.phpProjectFiles;
+
+    if (!hasEntrypoint && !signals.hasDockerfile && signals.platformConfigFiles.length === 0) {
+      return {
+        repoClass: "insufficient_evidence",
+        confidence: 0.44,
+        reasons: [
+          projectFiles[0]
+            ? `${projectFiles[0]} shows ${frameworkLabel} project intent.`
+            : `${frameworkLabel}-oriented files were detected.`,
+          "Shipd could not confirm a deployable service entrypoint yet."
+        ],
+        blockers: [`No runnable entrypoint, Dockerfile, or platform config was found for this ${frameworkLabel} project.`]
+      };
+    }
+
+    return {
+      repoClass: "service_app",
+      confidence: hasEntrypoint ? 0.78 : 0.66,
+      reasons: [
+        projectFiles[0]
+          ? `${projectFiles[0]} identifies a ${frameworkLabel} project.`
+          : `${frameworkLabel} service signals were detected.`,
+        ...(hasEntrypoint ? [`A ${frameworkLabel} application entrypoint was detected.`] : []),
+        ...(signals.hasDockerfile ? [`${signals.dockerfilePaths[0]} provides a containerized deployment path.`] : [])
+      ].slice(0, 3),
       blockers: []
     };
   }
