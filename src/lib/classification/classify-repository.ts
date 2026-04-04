@@ -138,38 +138,44 @@ export function classifyRepository(signals: RepoSignals): RepoClassificationResu
 
   if (signals.framework === "csharp" || signals.csharpProjectFiles.length > 0 || signals.runtime === "dotnet") {
     const hasDotnetEntrypoint = signals.deploymentDescriptorFiles.some(
-      (file) => file.endsWith(".csproj") || file.endsWith("Program.cs")
+      (file) => file.endsWith(".csproj") || file.endsWith(".sln") || file.endsWith("Program.cs")
     );
     const looksLikeDotnetWebApp = signals.dotnetAppType === "web";
+    // A .sln file is strong evidence of a real .NET project meant for deployment
+    const hasSolutionFile = signals.csharpProjectFiles.some((f) => f.endsWith(".sln"));
 
-    if (!looksLikeDotnetWebApp && hasDotnetEntrypoint && !signals.hasDockerfile && signals.platformConfigFiles.length === 0) {
+    if (!looksLikeDotnetWebApp && !hasSolutionFile && !hasDotnetEntrypoint && !signals.hasDockerfile && signals.platformConfigFiles.length === 0) {
       return {
         repoClass: "insufficient_evidence",
-        confidence: 0.42,
+        confidence: 0.38,
         reasons: [
-          "Shipd detected a .NET application entrypoint, but not enough evidence to confirm a deployable web or service runtime.",
+          "Shipd detected .NET signals but could not confirm a deployable web or service entrypoint.",
           ...(signals.deploymentDescriptorFiles[0]
-            ? [`${signals.deploymentDescriptorFiles[0]} may belong to a console or generic .NET app rather than a hosted web service.`]
+            ? [`${signals.deploymentDescriptorFiles[0]} may belong to a library or tool rather than a hosted service.`]
             : [])
         ],
-        blockers: ["No ASP.NET-style web runtime, deploy platform config, or container setup was confirmed."]
+        blockers: ["No ASP.NET-style web runtime, .sln solution, platform config, or container setup was confirmed."]
       };
     }
 
+    const confidence = looksLikeDotnetWebApp ? 0.84 : hasSolutionFile ? 0.8 : hasDotnetEntrypoint ? 0.76 : 0.6;
+
     return {
       repoClass: "service_app",
-      confidence: hasDotnetEntrypoint ? 0.78 : 0.58,
+      confidence,
       reasons: [
         signals.csharpProjectFiles[0]
           ? `${signals.csharpProjectFiles[0]} identifies a .NET project in this repository.`
           : "C# service signals were detected.",
         ...(looksLikeDotnetWebApp
-          ? ["Tree-sitter matched ASP.NET-style source patterns."]
-          : hasDotnetEntrypoint
-            ? ["A .NET application entrypoint was detected."]
-            : [])
+          ? ["Tree-sitter matched ASP.NET-style source patterns confirming a web service."]
+          : hasSolutionFile
+            ? ["A .NET solution file (.sln) confirms this is a structured .NET project."]
+            : hasDotnetEntrypoint
+              ? ["A .NET application entrypoint was detected."]
+              : [])
       ],
-      blockers: hasDotnetEntrypoint ? [] : ["Shipd could not yet confirm the main deployable .NET application entrypoint."]
+      blockers: hasDotnetEntrypoint || hasSolutionFile ? [] : ["Shipd could not yet confirm the main deployable .NET application entrypoint."]
     };
   }
 

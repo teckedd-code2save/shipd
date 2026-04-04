@@ -932,6 +932,363 @@ input {
   }
 }
 
+/* ── Deployment Guide ──────────────────────────────────────────────────── */
+
+.chat-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  position: relative;
+}
+
+.chat-tab:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chat-tab-active {
+  color: var(--text-primary);
+  background: rgba(91, 108, 242, 0.08);
+}
+
+.chat-tab-active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-blue);
+  border-radius: 2px 2px 0 0;
+}
+
+.chat-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(91, 108, 242, 0.18);
+  color: #d6dcff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.chat-guide-panel {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Guide root */
+.guide-root {
+  display: grid;
+  gap: 14px;
+}
+
+.guide-progress-header {
+  display: grid;
+  gap: 10px;
+}
+
+.guide-progress-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.guide-progress-platform {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.guide-progress-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.guide-progress-bar-track {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.guide-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5b6cf2, #7c8eff);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* Steps list */
+.guide-steps {
+  display: grid;
+  gap: 8px;
+}
+
+/* Individual step card */
+.guide-step {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  background: rgba(24, 27, 36, 0.72);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.guide-step:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.guide-step-done {
+  border-color: rgba(74, 222, 128, 0.14);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+/* Step header (clickable) */
+.guide-step-header {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Checkbox */
+.guide-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  background: rgba(31, 35, 48, 0.8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.guide-check:hover {
+  border-color: rgba(91, 108, 242, 0.5);
+}
+
+.guide-check-done {
+  border-color: rgba(74, 222, 128, 0.6);
+  background: rgba(74, 222, 128, 0.14);
+  color: #4ade80;
+}
+
+/* Step number badge */
+.guide-step-number {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgba(91, 108, 242, 0.12);
+  color: #a0aaff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Step meta row */
+.guide-step-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.guide-step-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.guide-step-title-done {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Category badges */
+.guide-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  padding: 3px 7px;
+  flex-shrink: 0;
+}
+
+.guide-badge-setup {
+  background: rgba(91, 108, 242, 0.14);
+  color: #c0caff;
+}
+
+.guide-badge-config {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fcd48a;
+}
+
+.guide-badge-deploy {
+  background: rgba(74, 222, 128, 0.1);
+  color: #86efac;
+}
+
+.guide-badge-verify {
+  background: rgba(168, 85, 247, 0.12);
+  color: #d8b4fe;
+}
+
+/* Chevron */
+.guide-chevron {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.guide-chevron-open {
+  transform: rotate(180deg);
+}
+
+/* Expanded body */
+.guide-step-body {
+  padding: 0 16px 16px 70px;
+  display: grid;
+  gap: 12px;
+}
+
+.guide-step-description {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* Commands block */
+.guide-commands {
+  display: grid;
+  gap: 6px;
+}
+
+.guide-command-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  background: rgba(10, 12, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.guide-terminal-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.guide-command {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: #d6dcff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(31, 35, 48, 0.8);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.guide-copy-btn:hover {
+  background: rgba(46, 51, 70, 0.95);
+  color: var(--text-secondary);
+}
+
+.guide-copy-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+/* Notes */
+.guide-step-notes {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  border-left: 2px solid rgba(91, 108, 242, 0.3);
+  padding-left: 10px;
+}
+
+/* Completion banner */
+.guide-complete-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  color: #86efac;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Empty state */
+.guide-empty {
+  text-align: center;
+  padding: 40px 24px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.guide-empty-hint {
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+/* ── End Deployment Guide ────────────────────────────────────────────────── */
+
 :focus-visible {
   outline: 2px solid var(--accent-blue);
   outline-offset: 2px;

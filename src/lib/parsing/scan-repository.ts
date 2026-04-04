@@ -137,6 +137,8 @@ function scoreCandidateRoot(filePath: string, evidenceKind?: EvidenceRecord["kin
   if (filePath.endsWith("/Program.cs") || filePath === "Program.cs") score += 5;
   if (filePath.endsWith("/main.py") || filePath.endsWith("/app.py") || filePath.endsWith("/asgi.py") || filePath.endsWith("/wsgi.py")) score += 5;
   if (filePath.endsWith("/pyproject.toml") || filePath.endsWith("/requirements.txt")) score += 3;
+  if (filePath.endsWith(".sln")) score += 5;
+  if (filePath === "appsettings.json" || filePath.endsWith("/appsettings.json")) score += 4;
   if (filePath === "go.mod" || filePath.endsWith("/go.mod")) score += 4;
   if (filePath === "Gemfile" || filePath.endsWith("/Gemfile")) score += 4;
   if (filePath === "pom.xml" || filePath.endsWith("/pom.xml") || filePath === "build.gradle" || filePath.endsWith("/build.gradle")) score += 4;
@@ -478,6 +480,56 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         title: "Ruby Rack entrypoint detected",
         detail: `${filePath} is a Rack config file used as the entrypoint for Ruby web services.`
       });
+      continue;
+    }
+
+    if (filePath.endsWith(".sln")) {
+      signals = mergeSignals(signals, {
+        framework: "csharp",
+        runtime: "dotnet",
+        csharpProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        {
+          kind: "framework",
+          value: "csharp",
+          sourceFile: filePath,
+          confidence: 0.92,
+          metadata: { appRoot: inferAppRootFromPath(filePath) }
+        },
+        {
+          kind: "runtime",
+          value: "dotnet",
+          sourceFile: filePath,
+          confidence: 0.92,
+          metadata: { appRoot: inferAppRootFromPath(filePath) }
+        }
+      );
+      registerCandidateRoot(filePath, "framework");
+      findings.push({
+        filePath,
+        severity: "ok",
+        title: ".NET solution file detected",
+        detail: `${filePath} identifies a .NET solution in this repository.`
+      });
+      continue;
+    }
+
+    if (filePath === "appsettings.json" || filePath.endsWith("/appsettings.json")) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "csharp" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "dotnet" : signals.runtime,
+        dotnetAppType: "web"
+      });
+      evidence.push({
+        kind: "framework",
+        value: "aspnet_core",
+        sourceFile: filePath,
+        confidence: 0.88,
+        metadata: { appRoot: inferAppRootFromPath(filePath) }
+      });
+      registerCandidateRoot(filePath, "framework");
       continue;
     }
 
