@@ -11,9 +11,17 @@ function hasDeploySignals(signals: RepoSignals) {
     signals.workflowFiles.length > 0 ||
     signals.platformConfigFiles.length > 0 ||
     signals.envFilePaths.length > 0 ||
-    signals.pythonProjectFiles.length > 0
+    signals.pythonProjectFiles.length > 0 ||
+    signals.goProjectFiles.length > 0 ||
+    signals.rubyProjectFiles.length > 0 ||
+    signals.javaProjectFiles.length > 0 ||
+    signals.rustProjectFiles.length > 0 ||
+    signals.phpProjectFiles.length > 0
   );
 }
+
+const SSR_FRAMEWORKS = new Set<RepoSignals["framework"]>(["sveltekit", "nuxt", "remix", "astro"]);
+const SERVICE_FRAMEWORKS = new Set<RepoSignals["framework"]>(["go", "rust", "ruby", "java", "php"]);
 
 function hasOnlyNotebookSignals(signals: RepoSignals) {
   return (
@@ -26,6 +34,14 @@ function hasOnlyNotebookSignals(signals: RepoSignals) {
 }
 
 function looksLikeInfraOnly(signals: RepoSignals) {
+  const hasAnyProjectFiles =
+    signals.pythonProjectFiles.length > 0 ||
+    signals.goProjectFiles.length > 0 ||
+    signals.rubyProjectFiles.length > 0 ||
+    signals.javaProjectFiles.length > 0 ||
+    signals.rustProjectFiles.length > 0 ||
+    signals.phpProjectFiles.length > 0;
+
   return (
     signals.hasInfrastructureCode &&
     signals.infrastructureFiles.length > 0 &&
@@ -33,7 +49,7 @@ function looksLikeInfraOnly(signals: RepoSignals) {
     signals.framework === "unknown" &&
     signals.runtime === "unknown" &&
     signals.platformConfigFiles.length === 0 &&
-    signals.pythonProjectFiles.length === 0 &&
+    !hasAnyProjectFiles &&
     signals.appRoots.length === 0
   );
 }
@@ -122,38 +138,44 @@ export function classifyRepository(signals: RepoSignals): RepoClassificationResu
 
   if (signals.framework === "csharp" || signals.csharpProjectFiles.length > 0 || signals.runtime === "dotnet") {
     const hasDotnetEntrypoint = signals.deploymentDescriptorFiles.some(
-      (file) => file.endsWith(".csproj") || file.endsWith("Program.cs")
+      (file) => file.endsWith(".csproj") || file.endsWith(".sln") || file.endsWith("Program.cs")
     );
     const looksLikeDotnetWebApp = signals.dotnetAppType === "web";
+    // A .sln file is strong evidence of a real .NET project meant for deployment
+    const hasSolutionFile = signals.csharpProjectFiles.some((f) => f.endsWith(".sln"));
 
-    if (!looksLikeDotnetWebApp && hasDotnetEntrypoint && !signals.hasDockerfile && signals.platformConfigFiles.length === 0) {
+    if (!looksLikeDotnetWebApp && !hasSolutionFile && !hasDotnetEntrypoint && !signals.hasDockerfile && signals.platformConfigFiles.length === 0) {
       return {
         repoClass: "insufficient_evidence",
-        confidence: 0.42,
+        confidence: 0.38,
         reasons: [
-          "Shipd detected a .NET application entrypoint, but not enough evidence to confirm a deployable web or service runtime.",
+          "Shipd detected .NET signals but could not confirm a deployable web or service entrypoint.",
           ...(signals.deploymentDescriptorFiles[0]
-            ? [`${signals.deploymentDescriptorFiles[0]} may belong to a console or generic .NET app rather than a hosted web service.`]
+            ? [`${signals.deploymentDescriptorFiles[0]} may belong to a library or tool rather than a hosted service.`]
             : [])
         ],
-        blockers: ["No ASP.NET-style web runtime, deploy platform config, or container setup was confirmed."]
+        blockers: ["No ASP.NET-style web runtime, .sln solution, platform config, or container setup was confirmed."]
       };
     }
 
+    const confidence = looksLikeDotnetWebApp ? 0.84 : hasSolutionFile ? 0.8 : hasDotnetEntrypoint ? 0.76 : 0.6;
+
     return {
       repoClass: "service_app",
-      confidence: hasDotnetEntrypoint ? 0.78 : 0.58,
+      confidence,
       reasons: [
         signals.csharpProjectFiles[0]
           ? `${signals.csharpProjectFiles[0]} identifies a .NET project in this repository.`
           : "C# service signals were detected.",
         ...(looksLikeDotnetWebApp
-          ? ["Tree-sitter matched ASP.NET-style source patterns."]
-          : hasDotnetEntrypoint
-            ? ["A .NET application entrypoint was detected."]
-            : [])
+          ? ["Tree-sitter matched ASP.NET-style source patterns confirming a web service."]
+          : hasSolutionFile
+            ? ["A .NET solution file (.sln) confirms this is a structured .NET project."]
+            : hasDotnetEntrypoint
+              ? ["A .NET application entrypoint was detected."]
+              : [])
       ],
-      blockers: hasDotnetEntrypoint ? [] : ["Shipd could not yet confirm the main deployable .NET application entrypoint."]
+      blockers: hasDotnetEntrypoint || hasSolutionFile ? [] : ["Shipd could not yet confirm the main deployable .NET application entrypoint."]
     };
   }
 
@@ -166,6 +188,78 @@ export function classifyRepository(signals: RepoSignals): RepoClassificationResu
         ...(signals.primaryAppRoot ? [`Shipd selected ${signals.primaryAppRoot === "." ? "the repo root" : signals.primaryAppRoot} as the primary deployable app.`] : []),
         ...(signals.hasDockerfile ? [`${signals.dockerfilePaths[0]} suggests a deployable runtime path.`] : [])
       ],
+      blockers: []
+    };
+  }
+
+  if (signals.framework && SSR_FRAMEWORKS.has(signals.framework)) {
+    const frameworkLabel =
+      signals.framework === "sveltekit"
+        ? "SvelteKit"
+        : signals.framework === "nuxt"
+          ? "Nuxt"
+          : signals.framework === "remix"
+            ? "Remix"
+            : "Astro";
+    return {
+      repoClass: "deployable_web_app",
+      confidence: signals.hasDockerfile || signals.platformConfigFiles.length > 0 ? 0.82 : 0.7,
+      reasons: [
+        `Framework signals identify this repository as a ${frameworkLabel} app.`,
+        ...(signals.primaryAppRoot ? [`Shipd selected ${signals.primaryAppRoot === "." ? "the repo root" : signals.primaryAppRoot} as the primary deployable app.`] : []),
+        ...(signals.hasDockerfile ? [`${signals.dockerfilePaths[0]} suggests a deployable runtime path.`] : [])
+      ],
+      blockers: []
+    };
+  }
+
+  if (signals.framework && SERVICE_FRAMEWORKS.has(signals.framework)) {
+    const hasEntrypoint = signals.deploymentDescriptorFiles.length > 0;
+    const frameworkLabel =
+      signals.framework === "go"
+        ? "Go"
+        : signals.framework === "rust"
+          ? "Rust"
+          : signals.framework === "ruby"
+            ? "Ruby"
+            : signals.framework === "java"
+              ? "Java"
+              : "PHP";
+    const projectFiles =
+      signals.framework === "go"
+        ? signals.goProjectFiles
+        : signals.framework === "rust"
+          ? signals.rustProjectFiles
+          : signals.framework === "ruby"
+            ? signals.rubyProjectFiles
+            : signals.framework === "java"
+              ? signals.javaProjectFiles
+              : signals.phpProjectFiles;
+
+    if (!hasEntrypoint && !signals.hasDockerfile && signals.platformConfigFiles.length === 0) {
+      return {
+        repoClass: "insufficient_evidence",
+        confidence: 0.44,
+        reasons: [
+          projectFiles[0]
+            ? `${projectFiles[0]} shows ${frameworkLabel} project intent.`
+            : `${frameworkLabel}-oriented files were detected.`,
+          "Shipd could not confirm a deployable service entrypoint yet."
+        ],
+        blockers: [`No runnable entrypoint, Dockerfile, or platform config was found for this ${frameworkLabel} project.`]
+      };
+    }
+
+    return {
+      repoClass: "service_app",
+      confidence: hasEntrypoint ? 0.78 : 0.66,
+      reasons: [
+        projectFiles[0]
+          ? `${projectFiles[0]} identifies a ${frameworkLabel} project.`
+          : `${frameworkLabel} service signals were detected.`,
+        ...(hasEntrypoint ? [`A ${frameworkLabel} application entrypoint was detected.`] : []),
+        ...(signals.hasDockerfile ? [`${signals.dockerfilePaths[0]} provides a containerized deployment path.`] : [])
+      ].slice(0, 3),
       blockers: []
     };
   }

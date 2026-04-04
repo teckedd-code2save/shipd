@@ -20,7 +20,7 @@ function deploymentEvidenceCount(context: ScoringContext) {
   const { signals, evidence } = context;
   let score = 0;
 
-  if (signals.framework && signals.framework !== "unknown") score += 1;
+  if (signals.framework && signals.framework !== "unknown") score += 2;
   if (signals.runtime && signals.runtime !== "unknown") score += 1;
   if (signals.hasDockerfile) score += 2;
   if (signals.hasCiWorkflow) score += 1;
@@ -29,6 +29,11 @@ function deploymentEvidenceCount(context: ScoringContext) {
   if (signals.platformConfigFiles.length > 0) score += 2;
   if (signals.hasInfrastructureCode) score += 2;
   if (signals.pythonProjectFiles.length > 0) score += 1;
+  if (signals.goProjectFiles.length > 0) score += 1;
+  if (signals.rubyProjectFiles.length > 0) score += 1;
+  if (signals.javaProjectFiles.length > 0) score += 1;
+  if (signals.rustProjectFiles.length > 0) score += 1;
+  if (signals.phpProjectFiles.length > 0) score += 1;
   score += Math.min(3, evidence.length / 4);
 
   return score;
@@ -49,6 +54,11 @@ function hasNotebookOnlyProfile(context: ScoringContext) {
 }
 
 function hasInsufficientEvidence(context: ScoringContext) {
+  // If classification already determined a strong class, trust it over raw evidence count
+  const STRONG_CLASSES = ["deployable_web_app", "service_app", "python_service", "cloudflare_worker_app"] as const;
+  if (STRONG_CLASSES.includes(context.classification.repoClass as (typeof STRONG_CLASSES)[number])) {
+    return false;
+  }
   return LOW_EVIDENCE_REPO_CLASSES.includes(context.classification.repoClass) || deploymentEvidenceCount(context) < 2;
 }
 

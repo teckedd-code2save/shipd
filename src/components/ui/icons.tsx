@@ -3,9 +3,10 @@ import type { CSSProperties } from "react";
 interface IconProps {
   size?: number;
   style?: CSSProperties;
+  className?: string;
 }
 
-function iconProps(size: number) {
+function iconProps(size: number, className?: string) {
   return {
     width: size,
     height: size,
@@ -15,7 +16,8 @@ function iconProps(size: number) {
     strokeWidth: 1.8,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
-    "aria-hidden": true
+    "aria-hidden": true,
+    ...(className ? { className } : {})
   };
 }
 
@@ -116,6 +118,31 @@ export function RefreshIcon({ size = 18, style }: IconProps) {
     <svg {...iconProps(size)} style={style}>
       <path d="M21 12a9 9 0 1 1-2.64-6.36" />
       <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ size = 18, style, className }: IconProps) {
+  return (
+    <svg {...iconProps(size, className)} style={style}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ size = 18, style, className }: IconProps) {
+  return (
+    <svg {...iconProps(size, className)} style={style}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+export function TerminalIcon({ size = 18, style, className }: IconProps) {
+  return (
+    <svg {...iconProps(size, className)} style={style}>
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
     </svg>
   );
 }

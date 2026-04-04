@@ -173,6 +173,168 @@ export const archetypeCatalog: ArchetypeDefinition[] = [
     }
   },
   {
+    id: "sveltekit_app",
+    appliesTo: ["deployable_web_app"],
+    match({ signals }) {
+      if (signals.framework !== "sveltekit") {
+        return { confidence: 0, reasons: [], disqualifiers: ["SvelteKit was not detected."] };
+      }
+      return {
+        confidence: !signals.hasCustomServer ? 0.88 : 0.62,
+        reasons: [
+          "SvelteKit was detected as the primary framework.",
+          ...(signals.platformConfigFiles.find((f) => f.includes("vercel"))
+            ? [`${signals.platformConfigFiles.find((f) => f.includes("vercel"))} reinforces a standard adapter deploy path.`]
+            : [])
+        ],
+        disqualifiers: []
+      };
+    }
+  },
+  {
+    id: "nuxt_app",
+    appliesTo: ["deployable_web_app"],
+    match({ signals }) {
+      if (signals.framework !== "nuxt") {
+        return { confidence: 0, reasons: [], disqualifiers: ["Nuxt was not detected."] };
+      }
+      return {
+        confidence: signals.hasDockerfile || signals.platformConfigFiles.length > 0 ? 0.84 : 0.76,
+        reasons: [
+          "Nuxt was detected as the primary framework.",
+          ...(signals.hasDockerfile && signals.dockerfilePaths[0] ? [`${signals.dockerfilePaths[0]} suggests a containerized deploy path.`] : [])
+        ],
+        disqualifiers: []
+      };
+    }
+  },
+  {
+    id: "remix_app",
+    appliesTo: ["deployable_web_app", "service_app"],
+    match({ signals }) {
+      if (signals.framework !== "remix") {
+        return { confidence: 0, reasons: [], disqualifiers: ["Remix was not detected."] };
+      }
+      return {
+        confidence: signals.hasCustomServer || signals.hasDockerfile ? 0.86 : 0.78,
+        reasons: [
+          "Remix was detected as the primary framework.",
+          ...(signals.hasCustomServer ? ["A custom server suggests this Remix app runs as a long-lived Node.js service."] : []),
+          ...(signals.hasDockerfile && signals.dockerfilePaths[0] ? [`${signals.dockerfilePaths[0]} provides a containerized deployment surface.`] : [])
+        ],
+        disqualifiers: []
+      };
+    }
+  },
+  {
+    id: "astro_app",
+    appliesTo: ["deployable_web_app"],
+    match({ signals }) {
+      if (signals.framework !== "astro") {
+        return { confidence: 0, reasons: [], disqualifiers: ["Astro was not detected."] };
+      }
+      return {
+        confidence: 0.86,
+        reasons: [
+          "Astro was detected as the primary framework.",
+          ...(signals.platformConfigFiles.find((f) => f.includes("vercel"))
+            ? [`${signals.platformConfigFiles.find((f) => f.includes("vercel"))} points to Vercel as the target adapter.`]
+            : [])
+        ],
+        disqualifiers: []
+      };
+    }
+  },
+  {
+    id: "go_service_app",
+    appliesTo: ["service_app"],
+    match({ signals }) {
+      if (signals.framework !== "go") {
+        return { confidence: 0, reasons: [], disqualifiers: ["Go was not detected."] };
+      }
+      const entrypoint = signals.deploymentDescriptorFiles.find((f) => f.endsWith("main.go"));
+      return {
+        confidence: entrypoint ? 0.9 : signals.hasDockerfile ? 0.76 : 0.62,
+        reasons: [
+          ...(signals.goProjectFiles[0] ? [`${signals.goProjectFiles[0]} identifies a Go module.`] : []),
+          ...(entrypoint ? [`${entrypoint} is the service entrypoint.`] : []),
+          ...(signals.hasDockerfile && signals.dockerfilePaths[0] ? [`${signals.dockerfilePaths[0]} provides a container deployment path.`] : [])
+        ].slice(0, 3),
+        disqualifiers: entrypoint ? [] : ["No main.go entrypoint was confirmed."]
+      };
+    }
+  },
+  {
+    id: "ruby_service_app",
+    appliesTo: ["service_app"],
+    match({ signals }) {
+      if (signals.framework !== "ruby") {
+        return { confidence: 0, reasons: [], disqualifiers: ["Ruby was not detected."] };
+      }
+      const entrypoint = signals.deploymentDescriptorFiles.find((f) => f.endsWith("config.ru"));
+      return {
+        confidence: entrypoint ? 0.88 : signals.hasDockerfile ? 0.74 : 0.6,
+        reasons: [
+          ...(signals.rubyProjectFiles[0] ? [`${signals.rubyProjectFiles[0]} identifies a Ruby project.`] : []),
+          ...(entrypoint ? [`${entrypoint} is the Rack application entrypoint.`] : []),
+          ...(signals.hasDockerfile && signals.dockerfilePaths[0] ? [`${signals.dockerfilePaths[0]} provides a container deployment path.`] : [])
+        ].slice(0, 3),
+        disqualifiers: []
+      };
+    }
+  },
+  {
+    id: "java_service_app",
+    appliesTo: ["service_app"],
+    match({ signals }) {
+      if (signals.framework !== "java") {
+        return { confidence: 0, reasons: [], disqualifiers: ["Java was not detected."] };
+      }
+      return {
+        confidence: signals.hasDockerfile ? 0.84 : signals.javaProjectFiles.length > 0 ? 0.74 : 0.58,
+        reasons: [
+          ...(signals.javaProjectFiles[0] ? [`${signals.javaProjectFiles[0]} identifies a Java project.`] : []),
+          ...(signals.hasDockerfile && signals.dockerfilePaths[0] ? [`${signals.dockerfilePaths[0]} provides a container deployment path.`] : [])
+        ].slice(0, 3),
+        disqualifiers: []
+      };
+    }
+  },
+  {
+    id: "rust_service_app",
+    appliesTo: ["service_app"],
+    match({ signals }) {
+      if (signals.framework !== "rust") {
+        return { confidence: 0, reasons: [], disqualifiers: ["Rust was not detected."] };
+      }
+      return {
+        confidence: signals.hasDockerfile ? 0.84 : signals.rustProjectFiles.length > 0 ? 0.74 : 0.58,
+        reasons: [
+          ...(signals.rustProjectFiles[0] ? [`${signals.rustProjectFiles[0]} identifies a Rust project.`] : []),
+          ...(signals.hasDockerfile && signals.dockerfilePaths[0] ? [`${signals.dockerfilePaths[0]} provides a container deployment path.`] : [])
+        ].slice(0, 3),
+        disqualifiers: []
+      };
+    }
+  },
+  {
+    id: "php_service_app",
+    appliesTo: ["service_app"],
+    match({ signals }) {
+      if (signals.framework !== "php") {
+        return { confidence: 0, reasons: [], disqualifiers: ["PHP was not detected."] };
+      }
+      return {
+        confidence: signals.hasDockerfile ? 0.82 : signals.phpProjectFiles.length > 0 ? 0.72 : 0.56,
+        reasons: [
+          ...(signals.phpProjectFiles[0] ? [`${signals.phpProjectFiles[0]} identifies a PHP project.`] : []),
+          ...(signals.hasDockerfile && signals.dockerfilePaths[0] ? [`${signals.dockerfilePaths[0]} provides a container deployment path.`] : [])
+        ].slice(0, 3),
+        disqualifiers: []
+      };
+    }
+  },
+  {
     id: "library_package",
     appliesTo: ["library_or_package"],
     match() {

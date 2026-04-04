@@ -17,6 +17,14 @@ import { getCurrentGitHubAccessToken } from "@/server/services/github-account-se
 import { loadRepositoryFilesFromGitHub } from "@/server/services/github-scan-source";
 import { findRepositoryById } from "@/server/services/repository-service";
 
+export interface DeploymentStep {
+  title: string;
+  description: string;
+  commands?: string[];
+  notes?: string;
+  category: "setup" | "config" | "deploy" | "verify";
+}
+
 export interface DeploymentPlanSnapshot {
   title: string;
   summary: string;
@@ -25,7 +33,7 @@ export interface DeploymentPlanSnapshot {
   confidence: number;
   blockers: string[];
   warnings: string[];
-  nextSteps: string[];
+  steps: DeploymentStep[];
 }
 
 export interface RepositoryAnalysisSnapshot {
@@ -135,19 +143,18 @@ function createPlanFromSnapshot(
     warnings: findings
       .filter((finding) => finding.severity === "warning")
       .map((finding) => finding.title),
-    nextSteps: [
-      ...(lowConfidence
-        ? [
-            "Add or confirm deployment-relevant files such as package.json, Dockerfile, pyproject.toml, or platform config",
-            "Confirm the runtime and entrypoint this repo should ship with",
-            "Re-scan once the repo exposes clearer deployment evidence"
-          ]
-        : [
-            `Create a ${topRecommendation.platform} project`,
-            "Set required environment variables",
-            "Confirm runtime and start command"
-          ])
-    ]
+    steps: lowConfidence
+      ? [
+          { category: "setup" as const, title: "Add deployment files", description: "Add deployment-relevant files such as package.json, Dockerfile, pyproject.toml, or a platform config so Shipd can classify this repo accurately." },
+          { category: "config" as const, title: "Confirm runtime and entrypoint", description: "Specify the runtime (Node.js, Python, Go, etc.) and the main entrypoint file this repo should use when launched." },
+          { category: "deploy" as const, title: "Re-scan after adding evidence", description: "Trigger a fresh scan once the repository exposes clearer deployment signals." }
+        ]
+      : [
+          { category: "setup" as const, title: `Create a ${topRecommendation.platform} project`, description: `Sign in to ${topRecommendation.platform} and create a new project linked to this repository.` },
+          { category: "config" as const, title: "Set required environment variables", description: "Copy variables from .env.example (or equivalent) into the platform dashboard and set any secrets needed at runtime." },
+          { category: "deploy" as const, title: "Confirm runtime and start command", description: "Verify the build command, start command, and Node/Python/Go version match what the repo expects." },
+          { category: "verify" as const, title: "Trigger a deployment and verify", description: "Push a commit or manually trigger a deploy, then confirm health checks and logs show a clean startup." }
+        ]
   };
 }
 
@@ -169,6 +176,29 @@ function isRepoSignals(value: unknown): value is RepoSignals {
 
 function normalizeStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function normalizeSteps(value: unknown): DeploymentStep[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      // Upgrade legacy string next-steps to DeploymentStep objects
+      if (typeof entry === "string") {
+        return { category: "setup" as const, title: entry, description: entry };
+      }
+      if (entry && typeof entry === "object") {
+        const step = entry as Record<string, unknown>;
+        return {
+          category: (["setup", "config", "deploy", "verify"].includes(step.category as string) ? step.category : "setup") as DeploymentStep["category"],
+          title: typeof step.title === "string" ? step.title : "Step",
+          description: typeof step.description === "string" ? step.description : "",
+          ...(Array.isArray(step.commands) ? { commands: normalizeStringArray(step.commands) } : {}),
+          ...(typeof step.notes === "string" ? { notes: step.notes } : {})
+        };
+      }
+      return null;
+    })
+    .filter((s): s is DeploymentStep => s !== null);
 }
 
 function normalizeRepoSignals(value: RepoSignals): RepoSignals {
@@ -195,6 +225,11 @@ function normalizeRepoSignals(value: RepoSignals): RepoSignals {
     deploymentDescriptorFiles: normalizeStringArray(value.deploymentDescriptorFiles),
     pythonProjectFiles: normalizeStringArray(value.pythonProjectFiles),
     csharpProjectFiles: normalizeStringArray(value.csharpProjectFiles),
+    goProjectFiles: normalizeStringArray(value.goProjectFiles),
+    rubyProjectFiles: normalizeStringArray(value.rubyProjectFiles),
+    javaProjectFiles: normalizeStringArray(value.javaProjectFiles),
+    rustProjectFiles: normalizeStringArray(value.rustProjectFiles),
+    phpProjectFiles: normalizeStringArray(value.phpProjectFiles),
     notebookFiles: normalizeStringArray(value.notebookFiles),
     scannedFiles: typeof value.scannedFiles === "number" ? value.scannedFiles : 0
   };
@@ -461,7 +496,7 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
           confidence: plan.confidence,
           blockers: normalizeStringArray(storedPlanJson?.blockers),
           warnings: normalizeStringArray(storedPlanJson?.warnings),
-          nextSteps: normalizeStringArray(storedPlanJson?.nextSteps)
+          steps: normalizeSteps(storedPlanJson?.steps ?? storedPlanJson?.nextSteps)
         }
       : fallbackPlan;
 
@@ -607,7 +642,7 @@ async function persistRepositoryAnalysis(snapshot: RepositoryAnalysisSnapshot) {
         planJson: {
           blockers: snapshot.plan.blockers,
           warnings: snapshot.plan.warnings,
-          nextSteps: snapshot.plan.nextSteps
+          steps: snapshot.plan.steps
         } as Prisma.InputJsonValue
       }
     });
