@@ -34,7 +34,7 @@ async function createAnthropicMessage(input: {
     },
     body: JSON.stringify({
       model: env.ANTHROPIC_MODEL,
-      max_tokens: 1000,
+      max_tokens: 4096,
       system: input.json ? `${input.system}\nReturn JSON only.` : input.system,
       messages: [
         {
@@ -53,12 +53,17 @@ async function createAnthropicMessage(input: {
   return (await response.json()) as AnthropicMessageResponse;
 }
 
+function stripMarkdownFences(text: string) {
+  return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+}
+
 function getAnthropicText(response: AnthropicMessageResponse) {
-  return response.content
+  const raw = response.content
     ?.filter((part) => part.type === "text" && typeof part.text === "string")
     .map((part) => part.text)
     .join("\n")
     .trim();
+  return raw ? stripMarkdownFences(raw) : raw;
 }
 
 export class AnthropicAdapter implements ModelAdapter {

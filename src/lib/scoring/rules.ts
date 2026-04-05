@@ -9,18 +9,16 @@ export interface PlatformRule {
   disqualifiers?: (context: ScoringContext) => string[];
 }
 
-const LOW_EVIDENCE_REPO_CLASSES: RepoClass[] = [
-  "insufficient_evidence",
-  "notebook_repo",
-  "infra_only",
-  "library_or_package"
-];
+// These classes hard-cap scores — insufficient_evidence is intentionally excluded
+// so LLM-extracted signals still produce meaningful scores even when classification
+// confidence is moderate.
+const HARD_CAP_REPO_CLASSES: RepoClass[] = ["notebook_repo", "infra_only", "library_or_package", "cli_tool"];
 
 function deploymentEvidenceCount(context: ScoringContext) {
   const { signals, evidence } = context;
   let score = 0;
 
-  if (signals.framework && signals.framework !== "unknown") score += 2;
+  if (signals.framework && signals.framework !== "unknown") score += 1;
   if (signals.runtime && signals.runtime !== "unknown") score += 1;
   if (signals.hasDockerfile) score += 2;
   if (signals.hasCiWorkflow) score += 1;
@@ -29,11 +27,6 @@ function deploymentEvidenceCount(context: ScoringContext) {
   if (signals.platformConfigFiles.length > 0) score += 2;
   if (signals.hasInfrastructureCode) score += 2;
   if (signals.pythonProjectFiles.length > 0) score += 1;
-  if (signals.goProjectFiles.length > 0) score += 1;
-  if (signals.rubyProjectFiles.length > 0) score += 1;
-  if (signals.javaProjectFiles.length > 0) score += 1;
-  if (signals.rustProjectFiles.length > 0) score += 1;
-  if (signals.phpProjectFiles.length > 0) score += 1;
   score += Math.min(3, evidence.length / 4);
 
   return score;
@@ -53,13 +46,12 @@ function hasNotebookOnlyProfile(context: ScoringContext) {
   );
 }
 
+function hasHardCapClass(context: ScoringContext) {
+  return HARD_CAP_REPO_CLASSES.includes(context.classification.repoClass);
+}
+
 function hasInsufficientEvidence(context: ScoringContext) {
-  // If classification already determined a strong class, trust it over raw evidence count
-  const STRONG_CLASSES = ["deployable_web_app", "service_app", "python_service", "cloudflare_worker_app"] as const;
-  if (STRONG_CLASSES.includes(context.classification.repoClass as (typeof STRONG_CLASSES)[number])) {
-    return false;
-  }
-  return LOW_EVIDENCE_REPO_CLASSES.includes(context.classification.repoClass) || deploymentEvidenceCount(context) < 2;
+  return hasHardCapClass(context) || deploymentEvidenceCount(context) < 2;
 }
 
 function verdictFromScore(score: number): PlatformRecommendation["verdict"] {
@@ -73,17 +65,20 @@ function verdictFromScore(score: number): PlatformRecommendation["verdict"] {
 function confidenceFromContext(context: ScoringContext) {
   const { classification, archetypes } = context;
 
-  if (hasNotebookOnlyProfile(context)) {
-    return 0.12;
-  }
+  if (hasNotebookOnlyProfile(context)) return 0.12;
 
   const evidenceStrength = Math.min(1, deploymentEvidenceCount(context) / 8);
   const topArchetypeConfidence = archetypes[0]?.confidence ?? 0;
   const confidence =
     classification.confidence * 0.45 + topArchetypeConfidence * 0.35 + evidenceStrength * 0.2;
 
-  if (LOW_EVIDENCE_REPO_CLASSES.includes(classification.repoClass)) {
+  if (HARD_CAP_REPO_CLASSES.includes(classification.repoClass)) {
     return Math.min(confidence, 0.34);
+  }
+
+  // insufficient_evidence: cap at 0.52 — we have signals but aren't fully certain
+  if (classification.repoClass === "insufficient_evidence") {
+    return Math.min(confidence, 0.52);
   }
 
   return Math.min(Math.max(confidence, 0.08), 0.95);
@@ -128,8 +123,11 @@ export function buildRecommendation(rule: PlatformRule, context: ScoringContext)
         : [])
     ];
   } else if (insufficientEvidence) {
-    score = Math.min(score, 22);
-    confidence = Math.min(confidence, 0.24);
+    // Hard-cap only the truly undeployable classes; let platform signals drive score
+    if (hasHardCapClass(context)) {
+      score = context.classification.repoClass === "cli_tool" ? 0 : Math.min(score, 18);
+    }
+    confidence = Math.min(confidence, 0.34);
     reasons = [
       "There is not enough deployment evidence in this repo yet to make a strong recommendation.",
       ...reasons

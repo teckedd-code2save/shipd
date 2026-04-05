@@ -1,31 +1,46 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+const SCAN_MESSAGES = [
+  "Reading the file structure...",
+  "Looking for framework signals...",
+  "Checking runtime and dependencies...",
+  "Scanning CI/CD workflows...",
+  "Analysing environment variables...",
+  "Detecting platform configurations...",
+  "Scoring deployment options...",
+  "Weighing platform tradeoffs...",
+  "Building your deployment plan...",
+  "Almost there..."
+];
+
 export default function ChatLoading() {
+  const [index, setIndex] = useState(0);
+  const [fading, setFading] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setIndex((i) => Math.min(i + 1, SCAN_MESSAGES.length - 1));
+        setFading(false);
+      }, 350);
+    }, 2400);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <main className="chat-page">
-      <section className="chat-shell">
-        <div className="chat-topbar">
-          <div className="loading-block" style={{ width: 220, height: 42 }} />
-          <div style={{ display: "flex", gap: 10 }}>
-            <div className="loading-circle" />
-            <div className="loading-circle" />
-            <div className="loading-circle" />
-          </div>
+    <main className="scan-loading-page">
+      <div className="scan-loading-content">
+        <div className="scan-loading-spinner">
+          <span /><span /><span /><span />
         </div>
-        <div className="chat-layout">
-          <aside className="chat-sidebar panel" style={{ minHeight: 520 }}>
-            <div className="loading-block" style={{ width: "100%", height: 180 }} />
-            <div className="loading-block" style={{ width: "100%", height: 120 }} />
-            <div className="loading-block" style={{ width: "100%", height: 120 }} />
-          </aside>
-          <section className="chat-workspace panel">
-            <div className="loading-block" style={{ width: "calc(100% - 48px)", height: 110, margin: 24 }} />
-            <div style={{ padding: "0 24px 24px", display: "grid", gap: 16 }}>
-              <div className="loading-block" style={{ width: "72%", height: 28 }} />
-              <div className="loading-block" style={{ width: "58%", height: 28 }} />
-              <div className="loading-block" style={{ width: "81%", height: 28 }} />
-            </div>
-          </section>
+        <div className={`scan-loading-message${fading ? " fading" : ""}`}>
+          {SCAN_MESSAGES[index]}
         </div>
-      </section>
+        <div className="scan-loading-sub">Shipd is analysing the repository</div>
+      </div>
     </main>
   );
 }

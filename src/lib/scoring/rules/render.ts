@@ -4,7 +4,7 @@ export const renderRule: PlatformRule = {
   platform: "Render",
   score(context) {
     const { signals } = context;
-    let score = 14;
+    let score = 10;
 
     if (hasArchetype(context, "dotnet_service_app")) score += 36;
     if (hasArchetype(context, "python_service_app")) score += 34;

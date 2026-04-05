@@ -126,7 +126,7 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
               <div className="repo-stat-block">
                 <div className="repo-stat-label">Top platform</div>
                 <div className="repo-stat-value">
-                  {repo.topPlatform ? `${repo.topPlatform}${repo.topScore ? ` · ${repo.topScore}%` : ""}` : "Not scored"}
+                  {repo.topPlatform ?? "Not scored"}
                 </div>
               </div>
             </div>
@@ -138,7 +138,6 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
               ) : null}
               {repo.repoClass ? <span className="repo-chip repo-chip-outline">{formatLabel(repo.repoClass)}</span> : null}
               {repo.topArchetype ? <span className="repo-chip">{formatLabel(repo.topArchetype)}</span> : null}
-              {repo.topConfidence ? <span className="repo-chip">{Math.round(repo.topConfidence * 100)}% confidence</span> : null}
             </div>
 
             <div className="repo-card-footer">

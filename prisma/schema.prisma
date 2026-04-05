@@ -68,10 +68,11 @@ model Repository {
   user      User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scans     Scan[]
   plans     DeploymentPlan[]
-  feedback  RecommendationFeedback[]
-  outcomes  OutcomeEvent[]
-  createdAt DateTime                 @default(now())
-  updatedAt DateTime                 @updatedAt
+  feedback      RecommendationFeedback[]
+  outcomes      OutcomeEvent[]
+  chatMessages  ChatMessage[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
 }
 
 model Scan {
@@ -227,6 +228,17 @@ model RecommendationFeedback {
 
   @@index([repositoryId, createdAt])
   @@index([scanId])
+}
+
+model ChatMessage {
+  id           String     @id @default(cuid())
+  repositoryId String
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  role         String
+  content      String
+  createdAt    DateTime   @default(now())
+
+  @@index([repositoryId, createdAt])
 }
 
 model OutcomeEvent {
