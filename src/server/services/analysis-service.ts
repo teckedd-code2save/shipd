@@ -270,6 +270,10 @@ function normalizeRepoSignals(value: RepoSignals): RepoSignals {
     pythonProjectFiles: normalizeStringArray(value.pythonProjectFiles),
     csharpProjectFiles: normalizeStringArray(value.csharpProjectFiles),
     goProjectFiles: normalizeStringArray(value.goProjectFiles),
+    rubyProjectFiles: normalizeStringArray(value.rubyProjectFiles),
+    javaProjectFiles: normalizeStringArray(value.javaProjectFiles),
+    rustProjectFiles: normalizeStringArray(value.rustProjectFiles),
+    phpProjectFiles: normalizeStringArray(value.phpProjectFiles),
     notebookFiles: normalizeStringArray(value.notebookFiles),
     scannedFiles: typeof value.scannedFiles === "number" ? value.scannedFiles : 0
   };

@@ -7,8 +7,17 @@ export const repoExtractionSchema = z.object({
     appRoots: z.array(z.string()),
     primaryAppRoot: z.string().optional(),
     dotnetAppType: z.enum(["web", "generic", "unknown"]),
-    framework: z.enum(["nextjs", "express", "react", "python", "csharp", "go", "rust", "java", "ruby", "unknown"]),
-    runtime: z.enum(["node18", "node20", "bun", "python", "dotnet", "go", "java", "ruby", "rust", "unknown"]),
+    framework: z.enum([
+      "nextjs", "sveltekit", "nuxt", "remix", "astro",
+      "express", "react", "python", "csharp",
+      "go", "rust", "ruby", "java", "php", "unknown"
+    ]),
+    runtime: z.enum([
+      "node18", "node20", "bun",
+      "python", "dotnet",
+      "go", "rust", "ruby", "java", "php",
+      "unknown"
+    ]),
     hasDockerfile: z.boolean(),
     dockerfilePaths: z.array(z.string()),
     hasCustomServer: z.boolean(),
@@ -25,6 +34,10 @@ export const repoExtractionSchema = z.object({
     pythonProjectFiles: z.array(z.string()),
     csharpProjectFiles: z.array(z.string()),
     goProjectFiles: z.array(z.string()),
+    rubyProjectFiles: z.array(z.string()).default([]),
+    javaProjectFiles: z.array(z.string()).default([]),
+    rustProjectFiles: z.array(z.string()).default([]),
+    phpProjectFiles: z.array(z.string()).default([]),
     notebookFiles: z.array(z.string()),
     scannedFiles: z.number().int().min(0)
   }),

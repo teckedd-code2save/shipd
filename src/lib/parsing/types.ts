@@ -4,8 +4,34 @@ export interface RepoSignals {
   appRoots: string[];
   primaryAppRoot?: string;
   dotnetAppType?: "web" | "generic" | "unknown";
-  framework?: "nextjs" | "express" | "react" | "python" | "csharp" | "go" | "rust" | "java" | "ruby" | "unknown";
-  runtime?: "node18" | "node20" | "bun" | "python" | "dotnet" | "go" | "java" | "ruby" | "rust" | "unknown";
+  framework?:
+    | "nextjs"
+    | "sveltekit"
+    | "nuxt"
+    | "remix"
+    | "astro"
+    | "express"
+    | "react"
+    | "python"
+    | "csharp"
+    | "go"
+    | "rust"
+    | "ruby"
+    | "java"
+    | "php"
+    | "unknown";
+  runtime?:
+    | "node18"
+    | "node20"
+    | "bun"
+    | "python"
+    | "dotnet"
+    | "go"
+    | "rust"
+    | "ruby"
+    | "java"
+    | "php"
+    | "unknown";
   hasDockerfile: boolean;
   dockerfilePaths: string[];
   hasCustomServer: boolean;
@@ -22,6 +48,10 @@ export interface RepoSignals {
   pythonProjectFiles: string[];
   csharpProjectFiles: string[];
   goProjectFiles: string[];
+  rubyProjectFiles: string[];
+  javaProjectFiles: string[];
+  rustProjectFiles: string[];
+  phpProjectFiles: string[];
   notebookFiles: string[];
   scannedFiles: number;
 }

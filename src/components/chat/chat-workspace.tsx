@@ -72,10 +72,13 @@ function CopyButton({ text }: { text: string }) {
 // ─── Markdown renderer ───────────────────────────────────────────────────────
 
 function renderInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s)>\]"]+)/);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
     if (part.startsWith("`") && part.endsWith("`")) return <code key={i} className="chat-inline-code">{part.slice(1, -1)}</code>;
+    if (part.startsWith("http://") || part.startsWith("https://")) {
+      return <a key={i} href={part} target="_blank" rel="noreferrer" className="chat-inline-link">{part}</a>;
+    }
     return part;
   });
 }

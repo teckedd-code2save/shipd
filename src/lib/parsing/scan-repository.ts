@@ -21,9 +21,14 @@ function chooseFramework(current: RepoSignals["framework"], next: RepoSignals["f
     rust: 2,
     java: 2,
     ruby: 2,
+    php: 2,
     express: 3,
     python: 3,
     csharp: 3,
+    astro: 3,
+    remix: 4,
+    sveltekit: 4,
+    nuxt: 4,
     nextjs: 4
   };
 
@@ -73,6 +78,10 @@ function mergeSignals(base: RepoSignals, next: Partial<RepoSignals>): RepoSignal
     pythonProjectFiles: Array.from(new Set([...base.pythonProjectFiles, ...(next.pythonProjectFiles ?? [])])),
     csharpProjectFiles: Array.from(new Set([...base.csharpProjectFiles, ...(next.csharpProjectFiles ?? [])])),
     goProjectFiles: Array.from(new Set([...base.goProjectFiles, ...(next.goProjectFiles ?? [])])),
+    rubyProjectFiles: Array.from(new Set([...base.rubyProjectFiles, ...(next.rubyProjectFiles ?? [])])),
+    javaProjectFiles: Array.from(new Set([...base.javaProjectFiles, ...(next.javaProjectFiles ?? [])])),
+    rustProjectFiles: Array.from(new Set([...base.rustProjectFiles, ...(next.rustProjectFiles ?? [])])),
+    phpProjectFiles: Array.from(new Set([...base.phpProjectFiles, ...(next.phpProjectFiles ?? [])])),
     notebookFiles: Array.from(new Set([...base.notebookFiles, ...(next.notebookFiles ?? [])])),
     scannedFiles: Math.max(base.scannedFiles, next.scannedFiles ?? base.scannedFiles)
   };
@@ -157,6 +166,10 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
     pythonProjectFiles: [],
     csharpProjectFiles: [],
     goProjectFiles: [],
+    rubyProjectFiles: [],
+    javaProjectFiles: [],
+    rustProjectFiles: [],
+    phpProjectFiles: [],
     notebookFiles: [],
     scannedFiles: Object.keys(files).length
   };

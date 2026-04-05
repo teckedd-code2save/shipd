@@ -1173,6 +1173,16 @@ input {
   color: var(--text-muted);
 }
 
+.chat-inline-link {
+  color: #818cf8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+.chat-inline-link:hover {
+  color: #a5b4fc;
+}
+
 .chat-inline-code {
   font-family: var(--font-mono);
   font-size: 12px;
