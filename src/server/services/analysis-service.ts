@@ -47,7 +47,7 @@ export interface RepositoryAnalysisSnapshot {
 }
 
 const ACTIVE_RECOMMENDATION_VERSION = {
-  label: "v4-multi-platform",
+  label: "v5-railway-nextjs-fix",
   extractorVersion: "3.0.0",
   classifierVersion: "3.0.0",
   archetypeVersion: "3.0.0",

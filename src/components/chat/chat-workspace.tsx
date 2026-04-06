@@ -77,7 +77,9 @@ function renderInline(text: string): React.ReactNode {
     if (part.startsWith("**") && part.endsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
     if (part.startsWith("`") && part.endsWith("`")) return <code key={i} className="chat-inline-code">{part.slice(1, -1)}</code>;
     if (part.startsWith("http://") || part.startsWith("https://")) {
-      return <a key={i} href={part} target="_blank" rel="noreferrer" className="chat-inline-link">{part}</a>;
+      const url = part.replace(/[.,!?;:]+$/, "");
+      const trailing = part.slice(url.length);
+      return <>{<a key={i} href={url} target="_blank" rel="noreferrer" className="chat-inline-link">{url}</a>}{trailing}</>;
     }
     return part;
   });
