@@ -4,8 +4,11 @@ import { auth } from "@/auth";
 import { AuthButton } from "@/components/auth/auth-button";
 import { GitHubIcon } from "@/components/ui/icons";
 
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+
 export async function SiteHeader() {
   const session = await auth();
+  const isAdmin = session?.user?.email ? ADMIN_EMAILS.includes(session.user.email.toLowerCase()) : false;
 
   return (
     <header className="site-header">
@@ -25,6 +28,11 @@ export async function SiteHeader() {
           <Link href="/dashboard" className="site-header-link">
             Dashboard
           </Link>
+          {isAdmin ? (
+            <Link href="/admin" className="site-header-link">
+              Metrics
+            </Link>
+          ) : null}
           {session?.user?.email ? (
             <span className="site-header-account">
               <GitHubIcon size={14} />
