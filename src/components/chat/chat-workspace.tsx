@@ -7,6 +7,19 @@ import { SendIcon, SparklesIcon } from "@/components/ui/icons";
 
 type PlanFitType = "clean" | "multi_service" | "no_fit";
 
+interface EnvProvider {
+  name: string;
+  url: string;
+  note?: string;
+}
+
+interface EnvProviderSuggestion {
+  var: string;
+  label: string;
+  description: string;
+  providers: EnvProvider[];
+}
+
 interface DeploymentPlan {
   title: string;
   summary: string;
@@ -18,6 +31,7 @@ interface DeploymentPlan {
   nextSteps: string[];
   fitType?: PlanFitType;
   altPaths?: string[];
+  envProviders?: EnvProviderSuggestion[];
 }
 
 interface ChatWorkspaceProps {
@@ -90,6 +104,9 @@ function renderMarkdown(text: string): React.ReactNode {
   const elements: React.ReactNode[] = [];
   const pending: { type: "ul" | "ol"; items: string[] } = { type: "ul", items: [] };
   let key = 0;
+  let inCodeBlock = false;
+  const codeLines: string[] = [];
+  let codeLang = "";
 
   function flushList() {
     if (!pending.items.length) return;
@@ -102,20 +119,70 @@ function renderMarkdown(text: string): React.ReactNode {
     pending.items = [];
   }
 
+  function flushCodeBlock() {
+    if (!codeLines.length) return;
+    elements.push(
+      <div key={key++} className="chat-code-block">
+        {codeLang && <span className="chat-code-lang">{codeLang}</span>}
+        <pre><code>{codeLines.join("\n")}</code></pre>
+      </div>
+    );
+    codeLines.length = 0;
+    codeLang = "";
+  }
+
   for (const line of lines) {
+    if (line.startsWith("```")) {
+      if (inCodeBlock) {
+        flushCodeBlock();
+        inCodeBlock = false;
+      } else {
+        flushList();
+        inCodeBlock = true;
+        codeLang = line.slice(3).trim();
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      continue;
+    }
+
     const bullet = line.match(/^[-*]\s+(.+)/);
     const numbered = line.match(/^\d+\.\s+(.+)/);
-    const heading = line.match(/^#{2,3}\s+(.+)/);
+    const heading = line.match(/^#{1,3}\s+(.+)/);
+    const blockquote = line.match(/^>\s*(.*)/);
+    const hr = line.match(/^---+$/);
 
-    if (bullet) { if (pending.type === "ol" && pending.items.length) flushList(); pending.type = "ul"; pending.items.push(bullet[1]!); }
-    else if (numbered) { if (pending.type === "ul" && pending.items.length) flushList(); pending.type = "ol"; pending.items.push(numbered[1]!); }
-    else {
+    if (bullet) {
+      if (pending.type === "ol" && pending.items.length) flushList();
+      pending.type = "ul";
+      pending.items.push(bullet[1]!);
+    } else if (numbered) {
+      if (pending.type === "ul" && pending.items.length) flushList();
+      pending.type = "ol";
+      pending.items.push(numbered[1]!);
+    } else {
       flushList();
-      if (heading) elements.push(<div key={key++} className="chat-md-heading">{renderInline(heading[1]!)}</div>);
-      else if (line.trim()) elements.push(<p key={key++} className="chat-md-para">{renderInline(line)}</p>);
+      if (hr) {
+        elements.push(<hr key={key++} className="chat-md-hr" />);
+      } else if (heading) {
+        const level = (line.match(/^(#{1,3})/)?.[1].length ?? 2);
+        elements.push(
+          <div key={key++} className={`chat-md-heading chat-md-h${level}`}>{renderInline(heading[1]!)}</div>
+        );
+      } else if (blockquote) {
+        elements.push(
+          <blockquote key={key++} className="chat-md-blockquote">{renderInline(blockquote[1]!)}</blockquote>
+        );
+      } else if (line.trim()) {
+        elements.push(<p key={key++} className="chat-md-para">{renderInline(line)}</p>);
+      }
     }
   }
   flushList();
+  if (inCodeBlock) flushCodeBlock();
   return <>{elements}</>;
 }
 
@@ -263,6 +330,30 @@ function PlanCard({
           ))}
         </div>
       </div>
+
+      {plan.envProviders && plan.envProviders.length > 0 && (
+        <div className="chat-plan-section">
+          <div className="chat-plan-section-label">Services you'll need to provision</div>
+          <div className="env-providers">
+            {plan.envProviders.map((ep, i) => (
+              <div key={i} className="env-provider-card">
+                <div className="env-provider-header">
+                  <code className="env-provider-var">{ep.var}</code>
+                  <span className="env-provider-label">{ep.label}</span>
+                </div>
+                <div className="env-provider-options">
+                  {ep.providers.map((p, j) => (
+                    <a key={j} href={p.url} target="_blank" rel="noreferrer" className="env-provider-option">
+                      <span className="env-provider-name">{p.name}</span>
+                      {p.note && <span className="env-provider-note">{p.note}</span>}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

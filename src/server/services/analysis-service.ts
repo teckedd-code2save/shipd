@@ -11,6 +11,7 @@ import type { RepoSignals } from "@/lib/parsing/types";
 import { scorePlatforms } from "@/lib/scoring/engine";
 import type { PlatformRecommendation } from "@/lib/scoring/types";
 import { extractRepoSignals } from "@/lib/analysis/extract-repo-signals";
+import { getEnvProviderSuggestions, type EnvProviderSuggestion } from "@/lib/analysis/env-providers";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { env, hasDatabaseEnv } from "@/lib/env";
 
@@ -31,6 +32,7 @@ export interface DeploymentPlanSnapshot {
   nextSteps: string[];
   fitType: PlanFitType;
   altPaths: string[];
+  envProviders: EnvProviderSuggestion[];
 }
 
 export interface RepositoryAnalysisSnapshot {
@@ -221,7 +223,8 @@ function createPlanFromSnapshot(
     warnings: findings.filter((f) => f.severity === "warning").map((f) => f.title),
     nextSteps,
     fitType,
-    altPaths: getAltPaths(fitType, signals)
+    altPaths: getAltPaths(fitType, signals),
+    envProviders: getEnvProviderSuggestions(signals?.envVars ?? [])
   };
 }
 
@@ -567,7 +570,8 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
           warnings: normalizeStringArray(storedPlanJson?.warnings),
           nextSteps: normalizeStringArray(storedPlanJson?.nextSteps),
           fitType: (storedPlanJson?.fitType as PlanFitType | undefined) ?? fallbackPlan.fitType,
-          altPaths: normalizeStringArray(storedPlanJson?.altPaths)
+          altPaths: normalizeStringArray(storedPlanJson?.altPaths),
+          envProviders: getEnvProviderSuggestions(normalizedSignals.envVars)
         }
       : fallbackPlan;
 

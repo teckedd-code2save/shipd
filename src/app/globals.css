@@ -1999,3 +1999,130 @@ a:focus-visible {
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* ─── Env provider cards ──────────────────────────────────────── */
+.env-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.env-provider-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.env-provider-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.env-provider-var {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(91,108,242,0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(91,108,242,0.25);
+  white-space: nowrap;
+}
+
+.env-provider-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.env-provider-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.env-provider-option {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.04);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+
+.env-provider-option:hover {
+  border-color: rgba(129,140,248,0.4);
+  background: rgba(91,108,242,0.1);
+}
+
+.env-provider-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.env-provider-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ─── Chat markdown enhancements ─────────────────────────────── */
+.chat-code-block {
+  position: relative;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.chat-code-lang {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 6px 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chat-code-block pre {
+  margin: 0;
+  padding: 10px 14px 12px;
+  overflow-x: auto;
+}
+
+.chat-code-block code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: #e2e8f0;
+  white-space: pre;
+}
+
+.chat-md-blockquote {
+  border-left: 3px solid rgba(91,108,242,0.5);
+  margin: 6px 0;
+  padding: 6px 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 14px;
+  background: rgba(91,108,242,0.06);
+  border-radius: 0 6px 6px 0;
+}
+
+.chat-md-hr {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 12px 0;
+}
+
+.chat-md-h1 { font-size: 16px; font-weight: 700; }
+.chat-md-h2 { font-size: 14px; font-weight: 600; }
+.chat-md-h3 { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
