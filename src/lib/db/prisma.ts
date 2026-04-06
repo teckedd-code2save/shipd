@@ -1,3 +1,4 @@
+import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
@@ -12,22 +13,24 @@ function createPrismaClient() {
     throw new Error("DATABASE_URL is required before Prisma can connect.");
   }
 
-  const adapter = new PrismaPg({
-    connectionString: env.DATABASE_URL!
+  const pool = new Pool({
+    connectionString: env.DATABASE_URL!,
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
   });
+
+  const adapter = new PrismaPg(pool);
 
   return new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 }
 
 export function getPrismaClient() {
-  const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = prisma;
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient();
   }
-
-  return prisma;
+  return globalForPrisma.prisma;
 }
