@@ -99,7 +99,7 @@ Verdict thresholds:
 | 70–84 | Good fit |
 | 55–69 | Can work |
 | 40–54 | Limited fit |
-| <40 | Not recommended |
+| &lt;40 | Not recommended |
 
 ### AI / Chat (`src/lib/ai/`)
 
