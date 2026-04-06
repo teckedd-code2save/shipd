@@ -35,7 +35,7 @@ export const railwayRule: PlatformRule = {
     if (signals.envVars.some((value) => value.includes("DATABASE"))) score += 8;
     if (signals.envVars.some((value) => value.includes("REDIS"))) score += 8;
     // Next.js with a database is a strong Railway use case — co-locate app + DB in one project
-    if (signals.framework === "nextjs" && signals.envVars.some((v) => v.includes("DATABASE"))) score += 18;
+    if (signals.framework === "nextjs" && signals.envVars.some((v) => v.includes("DATABASE"))) score += 26;
     // Plain Next.js with no DB, no Docker, no custom server is better served by Vercel
     else if (signals.framework === "nextjs" && !signals.hasDockerfile && !signals.hasCustomServer) score -= 6;
     return score;

@@ -52,6 +52,14 @@ export interface RepoSignals {
   javaProjectFiles: string[];
   rustProjectFiles: string[];
   phpProjectFiles: string[];
+  orm?: "prisma" | "drizzle" | "typeorm" | "sequelize" | "mongoose"
+      | "sqlalchemy" | "django"
+      | "activerecord"
+      | "gorm"
+      | "hibernate" | "jpa"
+      | "efcore"
+      | "eloquent";
+  hasMigrations: boolean;
   notebookFiles: string[];
   scannedFiles: number;
 }

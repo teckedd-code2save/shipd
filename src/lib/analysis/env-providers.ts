@@ -16,6 +16,7 @@ const ENV_PROVIDER_MAP: Array<{
       description: "A managed PostgreSQL connection string.",
       providers: [
         { name: "Neon", url: "https://neon.tech", note: "generous free tier, serverless Postgres" },
+        { name: "Prisma Postgres", url: "https://www.prisma.io/postgres", note: "zero-config if already using Prisma ORM" },
         { name: "Supabase", url: "https://supabase.com", note: "Postgres + auth + storage" },
         { name: "Railway", url: "https://railway.app", note: "one-click Postgres, same project as your app" },
         { name: "PlanetScale", url: "https://planetscale.com", note: "MySQL-compatible, not Postgres" }

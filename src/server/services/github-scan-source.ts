@@ -55,7 +55,13 @@ const SCAN_TARGETS = [
   "next.config.js",
   "next.config.mjs",
   "next.config.ts",
-  "tsconfig.json"
+  "tsconfig.json",
+  "prisma/schema.prisma",
+  "drizzle.config.ts",
+  "drizzle.config.js",
+  "drizzle.config.mjs",
+  "Gemfile",
+  "composer.json"
 ] as const;
 
 const WORKSPACE_DIRECTORIES = ["apps", "packages", "services", "sites"] as const;

@@ -49,7 +49,7 @@ export interface RepositoryAnalysisSnapshot {
 }
 
 const ACTIVE_RECOMMENDATION_VERSION = {
-  label: "v5-railway-nextjs-fix",
+  label: "v6-orm-detection",
   extractorVersion: "3.0.0",
   classifierVersion: "3.0.0",
   archetypeVersion: "3.0.0",
@@ -209,6 +209,31 @@ function createPlanFromSnapshot(
           : [
               `Create a ${topRecommendation.platform} project and connect this repository`,
               "Set required environment variables in the platform dashboard",
+              ...(signals?.orm === "prisma"
+                ? ["Run `npx prisma migrate deploy` on each deployment to apply pending migrations"]
+                : signals?.orm === "drizzle"
+                ? ["Run `npx drizzle-kit migrate` on each deployment to apply schema changes"]
+                : signals?.orm === "typeorm"
+                ? ["TypeORM can auto-run migrations on startup — set `migrationsRun: true` in your DataSource config"]
+                : signals?.orm === "sequelize"
+                ? ["Run `npx sequelize-cli db:migrate` on each deployment to apply pending migrations"]
+                : signals?.orm === "django"
+                ? ["Run `python manage.py migrate` on each deployment to apply pending migrations"]
+                : signals?.orm === "sqlalchemy"
+                ? ["Run `alembic upgrade head` (or your migration tool) on each deployment"]
+                : signals?.orm === "activerecord"
+                ? ["Run `bundle exec rails db:migrate` on each deployment to apply pending migrations"]
+                : signals?.orm === "efcore"
+                ? ["Run `dotnet ef database update` on each deployment to apply pending EF Core migrations"]
+                : signals?.orm === "hibernate"
+                ? ["Configure Hibernate `hbm2ddl.auto=validate` in production; apply migrations via Flyway or Liquibase"]
+                : signals?.orm === "gorm"
+                ? ["GORM can auto-migrate with `db.AutoMigrate()` — consider Goose or Atlas for production migrations"]
+                : signals?.orm === "eloquent"
+                ? ["Run `php artisan migrate --force` on each deployment to apply pending Laravel migrations"]
+                : signals?.hasMigrations
+                ? ["Apply any pending database migrations before the first request hits production"]
+                : []),
               "Confirm the build command and start command match your runtime",
               "Deploy and verify the first build completes successfully"
             ];
@@ -277,6 +302,8 @@ function normalizeRepoSignals(value: RepoSignals): RepoSignals {
     javaProjectFiles: normalizeStringArray(value.javaProjectFiles),
     rustProjectFiles: normalizeStringArray(value.rustProjectFiles),
     phpProjectFiles: normalizeStringArray(value.phpProjectFiles),
+    orm: (value.orm as RepoSignals["orm"]) ?? undefined,
+    hasMigrations: Boolean(value.hasMigrations),
     notebookFiles: normalizeStringArray(value.notebookFiles),
     scannedFiles: typeof value.scannedFiles === "number" ? value.scannedFiles : 0
   };

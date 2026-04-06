@@ -82,6 +82,8 @@ function mergeSignals(base: RepoSignals, next: Partial<RepoSignals>): RepoSignal
     javaProjectFiles: Array.from(new Set([...base.javaProjectFiles, ...(next.javaProjectFiles ?? [])])),
     rustProjectFiles: Array.from(new Set([...base.rustProjectFiles, ...(next.rustProjectFiles ?? [])])),
     phpProjectFiles: Array.from(new Set([...base.phpProjectFiles, ...(next.phpProjectFiles ?? [])])),
+    orm: next.orm ?? base.orm,
+    hasMigrations: next.hasMigrations ?? base.hasMigrations,
     notebookFiles: Array.from(new Set([...base.notebookFiles, ...(next.notebookFiles ?? [])])),
     scannedFiles: Math.max(base.scannedFiles, next.scannedFiles ?? base.scannedFiles)
   };
@@ -170,6 +172,8 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
     javaProjectFiles: [],
     rustProjectFiles: [],
     phpProjectFiles: [],
+    orm: undefined,
+    hasMigrations: false,
     notebookFiles: [],
     scannedFiles: Object.keys(files).length
   };
@@ -290,6 +294,19 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
           }
         });
       }
+      // ORM detection from package.json deps
+      if (!signals.orm) {
+        const hasPrisma = content.includes('"prisma"') || content.includes('"@prisma/client"');
+        const hasDrizzle = content.includes('"drizzle-orm"');
+        const hasTypeorm = content.includes('"typeorm"');
+        const hasSequelize = content.includes('"sequelize"');
+        const hasMongoose = content.includes('"mongoose"');
+        if (hasPrisma) signals = mergeSignals(signals, { orm: "prisma", hasMigrations: true });
+        else if (hasDrizzle) signals = mergeSignals(signals, { orm: "drizzle", hasMigrations: true });
+        else if (hasTypeorm) signals = mergeSignals(signals, { orm: "typeorm", hasMigrations: true });
+        else if (hasSequelize) signals = mergeSignals(signals, { orm: "sequelize", hasMigrations: true });
+        else if (hasMongoose) signals = mergeSignals(signals, { orm: "mongoose", hasMigrations: false });
+      }
       continue;
     }
 
@@ -370,6 +387,14 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         }
       );
       registerCandidateRoot(filePath, "framework");
+      // Python ORM detection from file content
+      if (!signals.orm) {
+        if (content.includes("sqlalchemy") || content.includes("SQLAlchemy")) {
+          signals = mergeSignals(signals, { orm: "sqlalchemy" as RepoSignals["orm"], hasMigrations: true });
+        } else if (content.includes("django")) {
+          signals = mergeSignals(signals, { orm: "django" as RepoSignals["orm"], hasMigrations: true });
+        }
+      }
       continue;
     }
 
@@ -422,6 +447,10 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         title: "Python application entrypoint detected",
         detail: `${filePath} suggests this repository contains a runnable Python service entrypoint.`
       });
+      // manage.py is a Django signal — Django ORM runs migrations via manage.py migrate
+      if (!signals.orm && (filePath.endsWith("/manage.py") || filePath === "manage.py")) {
+        signals = mergeSignals(signals, { orm: "django", hasMigrations: true });
+      }
       continue;
     }
 
@@ -460,6 +489,71 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         title: "C# project manifest detected",
         detail: `${filePath} identifies a .NET project in this repository.`
       });
+      // EF Core detection from .csproj content
+      if (!signals.orm && (content.includes("EntityFrameworkCore") || content.includes("Microsoft.EntityFrameworkCore"))) {
+        signals = mergeSignals(signals, { orm: "efcore", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (filePath === "Gemfile" || filePath.endsWith("/Gemfile")) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "ruby" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "ruby" : signals.runtime,
+        rubyProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        { kind: "framework", value: "ruby", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } },
+        { kind: "runtime", value: "ruby", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } }
+      );
+      registerCandidateRoot(filePath, "framework");
+      // ActiveRecord (Rails) detection
+      if (!signals.orm && (content.includes("'rails'") || content.includes('"rails"') || content.includes("activerecord"))) {
+        signals = mergeSignals(signals, { orm: "activerecord", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (
+      filePath === "pom.xml" || filePath.endsWith("/pom.xml") ||
+      filePath === "build.gradle" || filePath.endsWith("/build.gradle") ||
+      filePath === "build.gradle.kts" || filePath.endsWith("/build.gradle.kts")
+    ) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "java" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "java" : signals.runtime,
+        javaProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        { kind: "framework", value: "java", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } },
+        { kind: "runtime", value: "java", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } }
+      );
+      registerCandidateRoot(filePath, "framework");
+      // Hibernate/JPA detection
+      if (!signals.orm && (content.includes("hibernate") || content.includes("spring-data-jpa") || content.includes("jakarta.persistence"))) {
+        signals = mergeSignals(signals, { orm: "hibernate", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (filePath === "composer.json" || filePath.endsWith("/composer.json")) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "php" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "php" : signals.runtime,
+        phpProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        { kind: "framework", value: "php", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } },
+        { kind: "runtime", value: "php", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } }
+      );
+      registerCandidateRoot(filePath, "framework");
+      // Eloquent (Laravel) detection
+      if (!signals.orm && (content.includes("laravel/framework") || content.includes("illuminate/database"))) {
+        signals = mergeSignals(signals, { orm: "eloquent", hasMigrations: true });
+      }
       continue;
     }
 
@@ -478,6 +572,10 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         metadata: { label: "Go module" }
       });
       registerCandidateRoot(filePath, "runtime");
+      // GORM detection from go.mod content
+      if (!signals.orm && content.includes("gorm.io/gorm")) {
+        signals = mergeSignals(signals, { orm: "gorm", hasMigrations: true });
+      }
       continue;
     }
 
@@ -520,6 +618,20 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         title: "C# application entrypoint detected",
         detail: `${filePath} suggests a runnable .NET application entrypoint.`
       });
+      continue;
+    }
+
+    if (filePath === "prisma/schema.prisma" || filePath.endsWith("/schema.prisma")) {
+      signals = mergeSignals(signals, { orm: "prisma", hasMigrations: true });
+      evidence.push({ kind: "orm" as EvidenceRecord["kind"], value: "prisma", sourceFile: filePath, confidence: 0.98 });
+      findings.push({ filePath, severity: "ok", title: "Prisma schema detected", detail: "Run `prisma migrate deploy` during deployment to apply pending migrations." });
+      continue;
+    }
+
+    if (filePath.startsWith("drizzle.config")) {
+      signals = mergeSignals(signals, { orm: "drizzle", hasMigrations: true });
+      evidence.push({ kind: "orm" as EvidenceRecord["kind"], value: "drizzle", sourceFile: filePath, confidence: 0.96 });
+      findings.push({ filePath, severity: "ok", title: "Drizzle ORM config detected", detail: "Run `drizzle-kit migrate` or `drizzle-kit push` to apply schema changes." });
       continue;
     }
 

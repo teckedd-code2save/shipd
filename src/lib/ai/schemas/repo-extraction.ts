@@ -38,6 +38,16 @@ export const repoExtractionSchema = z.object({
     javaProjectFiles: z.array(z.string()).default([]),
     rustProjectFiles: z.array(z.string()).default([]),
     phpProjectFiles: z.array(z.string()).default([]),
+    orm: z.enum([
+      "prisma", "drizzle", "typeorm", "sequelize", "mongoose",
+      "sqlalchemy", "django",
+      "activerecord",
+      "gorm",
+      "hibernate", "jpa",
+      "efcore",
+      "eloquent"
+    ]).optional(),
+    hasMigrations: z.boolean().default(false),
     notebookFiles: z.array(z.string()),
     scannedFiles: z.number().int().min(0)
   }),

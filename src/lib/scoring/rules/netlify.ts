@@ -18,7 +18,9 @@ export const netlifyRule: PlatformRule = {
     if (signals.framework === "csharp" || signals.runtime === "dotnet") score -= 26;
     if (hasRepoClass(context, "service_app")) score -= 14;
     if (hasRepoClass(context, "library_or_package") || hasRepoClass(context, "notebook_repo")) score -= 20;
-    if (signals.envVars.some((v) => v.includes("DATABASE") || v.includes("REDIS"))) score -= 10;
+    // Persistent DB connections need a connection pooler on Netlify's serverless model
+    if (signals.envVars.some((v) => v.includes("DATABASE"))) score -= 16;
+    if (signals.envVars.some((v) => v.includes("REDIS"))) score -= 10;
 
     return score;
   },
@@ -54,7 +56,10 @@ export const netlifyRule: PlatformRule = {
     return [
       ...(signals.hasCustomServer ? ["Custom server entrypoint is not compatible with Netlify's serverless runtime"] : []),
       ...(signals.framework === "csharp" || signals.runtime === "dotnet" ? [".NET services are not supported on Netlify"] : []),
-      ...(signals.framework === "python" ? ["Python services require a container-based or PaaS platform — not Netlify"] : [])
+      ...(signals.framework === "python" ? ["Python services require a container-based or PaaS platform — not Netlify"] : []),
+      ...(signals.envVars.some((v) => v.includes("DATABASE"))
+        ? ["Persistent database connections don't fit Netlify's serverless model — consider Railway, Render, or Fly.io instead"]
+        : [])
     ];
   }
 };
