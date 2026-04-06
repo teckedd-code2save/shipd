@@ -18,15 +18,19 @@ Each platform rule produces:
 - **Evidence** — signals that support the score
 - **Disqualifiers** — reasons it doesn't fit
 
-Platforms are ranked by score. The top platform (≥30) is featured as the recommendation.
+Platforms are ranked by score. The top platform (score ≥ 30) is featured as the recommendation. If no platform scores ≥ 30, Shipd shows a no-fit state and uses the README to guide the chat.
 
 ## Platform coverage
 
 ### Railway
 
-Best for: Node.js services, Python services, full-stack apps with databases.
+Best for: Next.js apps with databases, Node.js services, Python services, full-stack apps.
 
-Strong signals: `railway.toml`, Dockerfile, Express/FastAPI/Django, `DATABASE_URL` env var, monorepo with multiple services.
+Strong signals: `railway.toml`, Dockerfile, `DATABASE_URL` env var (especially with Next.js), Express/FastAPI/Django, monorepo with multiple services.
+
+:::tip
+Railway is a strong alternative to Vercel when your app needs a co-located database. One project holds both the app and Postgres with `DATABASE_URL` auto-wired.
+:::
 
 ### Fly.io
 
@@ -36,12 +40,12 @@ Strong signals: `fly.toml`, Dockerfile, multi-region requirements, non-Node runt
 
 ### Vercel
 
-Best for: Next.js apps, static sites, edge functions.
+Best for: Next.js apps, SvelteKit, Nuxt, Remix, Astro, static sites.
 
-Strong signals: `next` in dependencies, `vercel.json`, no custom server, `next start` in scripts.
+Strong signals: `next` in dependencies, `vercel.json`, no custom server, standard Next.js build.
 
 :::caution
-Vercel scores near-zero for multi-service .NET solutions, CLI tools, and non-web repos.
+Vercel scores near-zero for multi-service .NET solutions, CLI tools, and non-web repos. Apps with `DATABASE_URL` work on Vercel but require a separate managed database (Neon, Supabase, Prisma Postgres).
 :::
 
 ### Render
@@ -82,9 +86,13 @@ Strong signals: `.do/app.yaml`, Dockerfile, straightforward runtimes.
 
 ### Netlify
 
-Best for: static sites, JAMstack, serverless functions.
+Best for: static sites, JAMstack frontends, serverless functions without persistent state.
 
-Strong signals: `netlify.toml`, static output (`next export`, Astro static), no server runtime.
+Strong signals: `netlify.toml`, static output (`next export`, Astro static), no server runtime, no database.
+
+:::caution
+Apps with `DATABASE_URL` score lower on Netlify — persistent database connections need a connection pooler (e.g. Prisma Accelerate, PgBouncer) to work reliably in Netlify's serverless model.
+:::
 
 ### Docker + VPS
 
@@ -102,3 +110,20 @@ These repo classes are **capped at 0** on all web platforms — they are not dep
 | `notebook_repo` | 18 | No deployable entrypoint |
 | `infra_only` | 18 | No application code |
 | `library_or_package` | 18 | Not a web service |
+
+## ORM migration steps
+
+When Shipd detects an ORM, the deployment plan includes the exact migration command for that stack:
+
+| ORM | Migration command |
+|---|---|
+| Prisma | `npx prisma migrate deploy` |
+| Drizzle | `npx drizzle-kit migrate` |
+| Django | `python manage.py migrate` |
+| SQLAlchemy | `alembic upgrade head` |
+| ActiveRecord (Rails) | `bundle exec rails db:migrate` |
+| EF Core (.NET) | `dotnet ef database update` |
+| Hibernate (Java) | Apply via Flyway or Liquibase |
+| GORM (Go) | `db.AutoMigrate()` or Goose |
+| Eloquent (Laravel) | `php artisan migrate --force` |
+| TypeORM | `migrationsRun: true` in DataSource config |
