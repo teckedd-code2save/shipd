@@ -5,8 +5,11 @@ import { ArrowLeftIcon, ArrowUpRightIcon, ChartIcon, FileIcon, GitHubIcon, Refre
 import { formatArchetypeLabel } from "@/lib/archetypes/labels";
 import { getPlatformDocsUrl } from "@/lib/platform-docs";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
+import { PlanLimitError } from "@/server/services/plan-limit-service";
 import { runRepositoryScanAction } from "@/app/dashboard/actions";
 import { findRepositoryById } from "@/server/services/repository-service";
+import { SiteHeader } from "@/components/layout/site-header";
+import { UpgradePrompt } from "@/components/billing/upgrade-prompt";
 
 function formatRepoClass(value: string) {
   return value.replaceAll("_", " ");
@@ -23,7 +26,24 @@ export default async function ChatPage({
   params: Promise<{ repoId: string }>;
 }) {
   const { repoId } = await params;
-  const analysis = await getRepositoryAnalysis(repoId);
+
+  let analysis: Awaited<ReturnType<typeof getRepositoryAnalysis>>;
+  try {
+    analysis = await getRepositoryAnalysis(repoId);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return (
+        <>
+          <SiteHeader />
+          <main className="page">
+            <UpgradePrompt kind={err.kind} />
+          </main>
+        </>
+      );
+    }
+    throw err;
+  }
+
   const repository = await findRepositoryById(repoId);
   const plan = analysis.plan;
   const repoLabel = repository ? `${repository.owner}/${repository.name}` : analysis.repoId;

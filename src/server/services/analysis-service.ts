@@ -13,8 +13,10 @@ import type { PlatformRecommendation } from "@/lib/scoring/types";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { hasDatabaseEnv } from "@/lib/env";
 
+import { auth } from "@/auth";
 import { getCurrentGitHubAccessToken } from "@/server/services/github-account-service";
 import { loadRepositoryFilesFromGitHub } from "@/server/services/github-scan-source";
+import { enforceAndTrackScan } from "@/server/services/plan-limit-service";
 import { findRepositoryById } from "@/server/services/repository-service";
 
 export interface DeploymentStep {
@@ -671,6 +673,14 @@ export async function getRepositoryAnalysis(
 
     if (persisted) {
       return persisted;
+    }
+  }
+
+  // Enforce plan limits before running a fresh compute (not on cache hits)
+  if (hasDatabaseEnv()) {
+    const session = await auth();
+    if (session?.user?.id) {
+      await enforceAndTrackScan(session.user.id, session.user.email, repoId);
     }
   }
 

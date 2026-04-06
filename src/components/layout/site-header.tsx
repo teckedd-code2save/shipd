@@ -25,6 +25,9 @@ export async function SiteHeader() {
           <Link href="/dashboard" className="site-header-link">
             Dashboard
           </Link>
+          <Link href="/pricing" className="site-header-link">
+            Pricing
+          </Link>
           {session?.user?.email ? (
             <span className="site-header-account">
               <GitHubIcon size={14} />

@@ -7,6 +7,12 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Plan {
+  FREE
+  PRO
+  TEAM
+}
+
 model User {
   id                     String                   @id @default(cuid())
   name                   String?
@@ -19,6 +25,10 @@ model User {
   exports                ExportArtifact[]
   recommendationFeedback RecommendationFeedback[]
   outcomeEvents          OutcomeEvent[]
+  plan                   Plan                     @default(FREE)
+  planScanCount          Int                      @default(0)
+  planPrivateScanCount   Int                      @default(0)
+  planScanResetAt        DateTime                 @default(now())
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
 }
@@ -64,6 +74,7 @@ model Repository {
   fullName  String                   @unique
   githubUrl String
   githubId  String?
+  isPrivate Boolean                  @default(false)
   userId    String
   user      User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   scans     Scan[]

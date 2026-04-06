@@ -60,7 +60,8 @@ export async function syncViewerRepositories() {
           owner: repo.owner,
           name: repo.name,
           githubUrl: repo.htmlUrl,
-          githubId: repo.githubId
+          githubId: repo.githubId,
+          isPrivate: repo.isPrivate
         },
         create: {
           owner: repo.owner,
@@ -68,6 +69,7 @@ export async function syncViewerRepositories() {
           fullName: repo.fullName,
           githubUrl: repo.htmlUrl,
           githubId: repo.githubId,
+          isPrivate: repo.isPrivate,
           userId
         }
       })

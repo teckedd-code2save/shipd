@@ -477,7 +477,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </button>
         </div>
         <div className="chat-input-hint">
-          Try: "Give me a step-by-step deploy guide", "Why not Railway?", or "Summarize blockers before launch".
+          Try: &quot;Give me a step-by-step deploy guide&quot;, &quot;Why not Railway?&quot;, or &quot;Summarize blockers before launch&quot;.
         </div>
       </div>
     </section>
