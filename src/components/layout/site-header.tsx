@@ -28,7 +28,7 @@ export async function SiteHeader() {
           {session?.user?.email ? (
             <span className="site-header-account">
               <GitHubIcon size={14} />
-              {session.user.email}
+              <span className="site-header-email">{session.user.email}</span>
             </span>
           ) : null}
           <AuthButton />

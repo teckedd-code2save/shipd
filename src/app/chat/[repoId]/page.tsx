@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ChatWorkspace } from "@/components/chat/chat-workspace";
+import { ChatSidebarLayout } from "@/components/chat/chat-sidebar-layout";
 import { ArrowLeftIcon, ArrowUpRightIcon, ChartIcon, FileIcon, GitHubIcon, RefreshIcon } from "@/components/ui/icons";
 import { formatArchetypeLabel, formatConfidenceLabel, formatRepoClassLabel, formatTopologyLabel } from "@/lib/archetypes/labels";
 import { getPlatformDocsUrl } from "@/lib/platform-docs";
@@ -52,22 +53,21 @@ export default async function ChatPage({
                 <input type="hidden" name="repoId" value={repoId} />
                 <button type="submit" className="chat-icon-link" aria-label="Run scan">
                   <RefreshIcon size={16} />
-                  Rescan
+                  <span className="btn-label">Rescan</span>
                 </button>
               </form>
               <Link href={`/comparison/${repoId}`} className="chat-icon-link" aria-label="Compare platforms">
                 <ChartIcon size={16} />
-                Compare
+                <span className="btn-label">Compare</span>
               </Link>
               <Link href={`/scan/${repoId}`} className="chat-icon-link" aria-label="View scan">
                 <FileIcon size={16} />
-                Scan
+                <span className="btn-label">Scan</span>
               </Link>
             </div>
           </header>
 
-          <div className="chat-layout">
-            <aside className="chat-sidebar panel">
+          <ChatSidebarLayout sidebar={<>
               <div className="chat-sidebar-score">
                 {plan.fitType === "no_fit" || plan.score < 30 ? (
                   <>
@@ -210,8 +210,7 @@ export default async function ChatPage({
                   ) : null}
                 </div>
               </div>
-            </aside>
-
+          </>}>
             <ChatWorkspace
               repoId={repoId}
               initialPlan={plan}
@@ -222,7 +221,7 @@ export default async function ChatPage({
               primaryAppRoot={analysis.signals.primaryAppRoot}
               topology={analysis.signals.repoTopology}
             />
-          </div>
+          </ChatSidebarLayout>
         </section>
       </main>
     </>
