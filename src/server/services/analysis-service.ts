@@ -10,8 +10,10 @@ import type { RepositoryFileMap } from "@/lib/parsing/shared";
 import type { RepoSignals } from "@/lib/parsing/types";
 import { scorePlatforms } from "@/lib/scoring/engine";
 import type { PlatformRecommendation } from "@/lib/scoring/types";
+import { extractRepoSignals } from "@/lib/analysis/extract-repo-signals";
+import { getEnvProviderSuggestions, type EnvProviderSuggestion } from "@/lib/analysis/env-providers";
 import { getPrismaClient } from "@/lib/db/prisma";
-import { hasDatabaseEnv } from "@/lib/env";
+import { env, hasDatabaseEnv } from "@/lib/env";
 
 import { auth } from "@/auth";
 import { getCurrentGitHubAccessToken } from "@/server/services/github-account-service";
@@ -19,13 +21,7 @@ import { loadRepositoryFilesFromGitHub } from "@/server/services/github-scan-sou
 import { enforceAndTrackScan } from "@/server/services/plan-limit-service";
 import { findRepositoryById } from "@/server/services/repository-service";
 
-export interface DeploymentStep {
-  title: string;
-  description: string;
-  commands?: string[];
-  notes?: string;
-  category: "setup" | "config" | "deploy" | "verify";
-}
+export type PlanFitType = "clean" | "multi_service" | "no_fit";
 
 export interface DeploymentPlanSnapshot {
   title: string;
@@ -35,7 +31,10 @@ export interface DeploymentPlanSnapshot {
   confidence: number;
   blockers: string[];
   warnings: string[];
-  steps: DeploymentStep[];
+  nextSteps: string[];
+  fitType: PlanFitType;
+  altPaths: string[];
+  envProviders: EnvProviderSuggestion[];
 }
 
 export interface RepositoryAnalysisSnapshot {
@@ -52,13 +51,13 @@ export interface RepositoryAnalysisSnapshot {
 }
 
 const ACTIVE_RECOMMENDATION_VERSION = {
-  label: "v2-deterministic-initial",
-  extractorVersion: "2.0.0",
-  classifierVersion: "2.0.0",
-  archetypeVersion: "2.0.0",
-  mappingVersion: "2.0.0",
-  guideVersion: "2.0.0",
-  aiVersion: "2.0.0"
+  label: "v6-orm-detection",
+  extractorVersion: "3.0.0",
+  classifierVersion: "3.0.0",
+  archetypeVersion: "3.0.0",
+  mappingVersion: "3.0.0",
+  guideVersion: "3.0.0",
+  aiVersion: "3.0.0"
 } as const;
 
 function loadRepositoryFixture(_repoId: string): RepositoryFileMap {
@@ -102,13 +101,50 @@ jobs:
   };
 }
 
+function detectFitType(
+  recommendations: PlatformRecommendation[],
+  classification: RepoClassificationResult,
+  signals?: RepoSignals
+): PlanFitType {
+  if (classification.repoClass === "cli_tool") return "no_fit";
+  const topScore = recommendations[0]?.score ?? 0;
+  const isMultiService =
+    (signals?.repoTopology === "dotnet_solution" && (signals?.csharpProjectFiles.length ?? 0) > 3) ||
+    (signals?.repoTopology === "monorepo" && classification.repoClass === "service_app");
+
+  // Only flag as multi_service if no platform scores confidently for the full stack
+  if (isMultiService && topScore < 60) return "multi_service";
+  if (topScore < 40) return "no_fit";
+  return "clean";
+}
+
+function getAltPaths(fitType: PlanFitType, signals?: RepoSignals): string[] {
+  if (fitType === "clean") return [];
+
+  if (signals?.runtime === "dotnet" || signals?.framework === "csharp") {
+    return [
+      "Azure Container Apps — native .NET Aspire support, managed multi-container orchestration",
+      "Docker + VPS — deploy all services with docker-compose on a single VPS",
+      "Fly.io — deploy each service as an independent Fly app with private networking",
+      "Railway — deploy each project as a linked service within one Railway project"
+    ];
+  }
+
+  return [
+    "Docker + VPS — simplest full-control multi-service setup",
+    "AWS App Runner / GCP Cloud Run — managed container platforms with per-service scaling",
+    "Fly.io — independent apps per service with Fly private networking",
+    "Railway — link services in one project with shared environment variables"
+  ];
+}
+
 function createPlanFromSnapshot(
   findings: ScanFinding[],
   recommendations: PlatformRecommendation[],
   classification: RepoClassificationResult,
   archetypes: ArchetypeMatchResult[],
   signals?: RepoSignals
-) {
+): DeploymentPlanSnapshot {
   const topRecommendation = recommendations[0] ?? {
     platform: "Unknown",
     score: 0,
@@ -116,6 +152,9 @@ function createPlanFromSnapshot(
     verdict: "poor" as const,
     reasons: ["Not enough repository signals were available yet."]
   };
+
+  const fitType = detectFitType(recommendations, classification, signals);
+  const isCliTool = classification.repoClass === "cli_tool";
 
   const lowConfidence =
     classification.repoClass === "insufficient_evidence" ||
@@ -125,38 +164,94 @@ function createPlanFromSnapshot(
     topRecommendation.confidence < 0.3 ||
     topRecommendation.score < 25;
 
+  const summary =
+    isCliTool
+      ? `This looks like a CLI tool, not a web service. CLI tools are distributed as binaries — not deployed to cloud hosting platforms like Railway or Vercel. Consider publishing via GitHub Releases, Homebrew, or a package registry instead.`
+      : fitType === "multi_service"
+      ? `This is a multi-service repository. No single platform covers all services cleanly. ${topRecommendation.platform} is the closest option — deploying each service independently is the most practical path.`
+      : fitType === "no_fit"
+        ? `Shipd couldn't find enough deployment signals to recommend a platform. Add a package.json, Dockerfile, or platform config file and rescan — that usually gives Shipd enough to work with.`
+        : lowConfidence
+          ? `Shipd found some signals but not enough to be confident. ${topRecommendation.platform} is a tentative suggestion — adding deployment files and rescanning will give a sharper answer.`
+          : `${topRecommendation.platform} is the best fit${
+              archetypes[0] && archetypes[0].confidence >= 0.55
+                ? ` — matched to the ${archetypes[0].archetype.replaceAll("_", " ")} archetype.`
+                : signals?.framework && signals.framework !== "unknown"
+                  ? ` for this ${signals.framework} ${signals.primaryAppRoot && signals.primaryAppRoot !== "." ? `app at ${signals.primaryAppRoot}` : "application"}.`
+                  : "."
+            }`;
+
+  const nextSteps =
+    isCliTool
+      ? [
+          "Create a GitHub Release to distribute the compiled binary",
+          "Add a GoReleaser or GitHub Actions workflow to build for multiple platforms",
+          "Consider publishing to a package manager (Homebrew, Scoop, pkg.go.dev)",
+          "Add installation instructions to your README"
+        ]
+      : fitType === "multi_service"
+      ? [
+          "Add a Dockerfile to each service that needs independent deployment",
+          `Deploy the primary entry point (${signals?.primaryAppRoot ?? "main app"}) to ${topRecommendation.platform} first`,
+          "Set up each supporting service as a separate deployment unit",
+          "Configure service-to-service networking and shared environment variables"
+        ]
+      : fitType === "no_fit"
+        ? [
+            "Add a package.json, Dockerfile, or requirements.txt so Shipd can identify the runtime",
+            "Rescan after adding deployment files — scores usually jump significantly",
+            "Add a platform config file (e.g. railway.toml, fly.toml) if you already know where you want to deploy"
+          ]
+        : lowConfidence
+          ? [
+              "Add or confirm deployment files: package.json, Dockerfile, pyproject.toml, or a platform config",
+              "Confirm the runtime and entrypoint this repo should ship with",
+              "Re-scan once the repo exposes clearer deployment evidence"
+            ]
+          : [
+              `Create a ${topRecommendation.platform} project and connect this repository`,
+              "Set required environment variables in the platform dashboard",
+              ...(signals?.orm === "prisma"
+                ? ["Run `npx prisma migrate deploy` on each deployment to apply pending migrations"]
+                : signals?.orm === "drizzle"
+                ? ["Run `npx drizzle-kit migrate` on each deployment to apply schema changes"]
+                : signals?.orm === "typeorm"
+                ? ["TypeORM can auto-run migrations on startup — set `migrationsRun: true` in your DataSource config"]
+                : signals?.orm === "sequelize"
+                ? ["Run `npx sequelize-cli db:migrate` on each deployment to apply pending migrations"]
+                : signals?.orm === "django"
+                ? ["Run `python manage.py migrate` on each deployment to apply pending migrations"]
+                : signals?.orm === "sqlalchemy"
+                ? ["Run `alembic upgrade head` (or your migration tool) on each deployment"]
+                : signals?.orm === "activerecord"
+                ? ["Run `bundle exec rails db:migrate` on each deployment to apply pending migrations"]
+                : signals?.orm === "efcore"
+                ? ["Run `dotnet ef database update` on each deployment to apply pending EF Core migrations"]
+                : signals?.orm === "hibernate"
+                ? ["Configure Hibernate `hbm2ddl.auto=validate` in production; apply migrations via Flyway or Liquibase"]
+                : signals?.orm === "gorm"
+                ? ["GORM can auto-migrate with `db.AutoMigrate()` — consider Goose or Atlas for production migrations"]
+                : signals?.orm === "eloquent"
+                ? ["Run `php artisan migrate --force` on each deployment to apply pending Laravel migrations"]
+                : signals?.hasMigrations
+                ? ["Apply any pending database migrations before the first request hits production"]
+                : []),
+              "Confirm the build command and start command match your runtime",
+              "Deploy and verify the first build completes successfully"
+            ];
+
   return {
     title: `${topRecommendation.platform} deployment plan`,
-    summary: lowConfidence
-      ? `Shipd does not yet have enough deployment evidence to make a strong platform call for this repository. Repo class: ${classification.repoClass.replaceAll("_", " ")}. ${topRecommendation.platform} is only a tentative placeholder based on weak signals.`
-      : `${topRecommendation.platform} is currently the best fit for this repository${
-          archetypes[0] && archetypes[0].confidence >= 0.55
-            ? ` because Shipd matched it to the ${archetypes[0].archetype.replaceAll("_", " ")} archetype.`
-            : signals?.framework && signals.framework !== "unknown"
-              ? ` because Shipd detected a ${signals.framework} ${signals.primaryAppRoot ? `app rooted at ${signals.primaryAppRoot === "." ? "the repo root" : signals.primaryAppRoot}` : "application"} with a service-style deployment path.`
-              : "."
-        }`,
+    summary,
     topPlatform: topRecommendation.platform,
     score: topRecommendation.score,
     confidence: topRecommendation.confidence,
-    blockers: findings
-      .filter((finding) => finding.severity === "blocker")
-      .map((finding) => finding.title),
-    warnings: findings
-      .filter((finding) => finding.severity === "warning")
-      .map((finding) => finding.title),
-    steps: lowConfidence
-      ? [
-          { category: "setup" as const, title: "Add deployment files", description: "Add deployment-relevant files such as package.json, Dockerfile, pyproject.toml, or a platform config so Shipd can classify this repo accurately." },
-          { category: "config" as const, title: "Confirm runtime and entrypoint", description: "Specify the runtime (Node.js, Python, Go, etc.) and the main entrypoint file this repo should use when launched." },
-          { category: "deploy" as const, title: "Re-scan after adding evidence", description: "Trigger a fresh scan once the repository exposes clearer deployment signals." }
-        ]
-      : [
-          { category: "setup" as const, title: `Create a ${topRecommendation.platform} project`, description: `Sign in to ${topRecommendation.platform} and create a new project linked to this repository.` },
-          { category: "config" as const, title: "Set required environment variables", description: "Copy variables from .env.example (or equivalent) into the platform dashboard and set any secrets needed at runtime." },
-          { category: "deploy" as const, title: "Confirm runtime and start command", description: "Verify the build command, start command, and Node/Python/Go version match what the repo expects." },
-          { category: "verify" as const, title: "Trigger a deployment and verify", description: "Push a commit or manually trigger a deploy, then confirm health checks and logs show a clean startup." }
-        ]
+    blockers: findings.filter((f) => f.severity === "blocker").map((f) => f.title),
+    warnings: findings.filter((f) => f.severity === "warning").map((f) => f.title),
+    nextSteps,
+    fitType,
+    altPaths: getAltPaths(fitType, signals),
+    envProviders: getEnvProviderSuggestions(signals?.envVars ?? [])
   };
 }
 
@@ -178,29 +273,6 @@ function isRepoSignals(value: unknown): value is RepoSignals {
 
 function normalizeStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
-}
-
-function normalizeSteps(value: unknown): DeploymentStep[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => {
-      // Upgrade legacy string next-steps to DeploymentStep objects
-      if (typeof entry === "string") {
-        return { category: "setup" as const, title: entry, description: entry };
-      }
-      if (entry && typeof entry === "object") {
-        const step = entry as Record<string, unknown>;
-        return {
-          category: (["setup", "config", "deploy", "verify"].includes(step.category as string) ? step.category : "setup") as DeploymentStep["category"],
-          title: typeof step.title === "string" ? step.title : "Step",
-          description: typeof step.description === "string" ? step.description : "",
-          ...(Array.isArray(step.commands) ? { commands: normalizeStringArray(step.commands) } : {}),
-          ...(typeof step.notes === "string" ? { notes: step.notes } : {})
-        };
-      }
-      return null;
-    })
-    .filter((s): s is DeploymentStep => s !== null);
 }
 
 function normalizeRepoSignals(value: RepoSignals): RepoSignals {
@@ -232,6 +304,8 @@ function normalizeRepoSignals(value: RepoSignals): RepoSignals {
     javaProjectFiles: normalizeStringArray(value.javaProjectFiles),
     rustProjectFiles: normalizeStringArray(value.rustProjectFiles),
     phpProjectFiles: normalizeStringArray(value.phpProjectFiles),
+    orm: (value.orm as RepoSignals["orm"]) ?? undefined,
+    hasMigrations: Boolean(value.hasMigrations),
     notebookFiles: normalizeStringArray(value.notebookFiles),
     scannedFiles: typeof value.scannedFiles === "number" ? value.scannedFiles : 0
   };
@@ -344,9 +418,29 @@ async function loadRepositoryFiles(repoId: string) {
 
 async function computeRepositoryAnalysis(repoId: string): Promise<RepositoryAnalysisSnapshot> {
   const files = await loadRepositoryFiles(repoId);
-  const { signals, findings, evidence } = scanRepositoryFiles(files);
-  const classification = classifyRepository(signals);
-  const archetypes = matchArchetypes({ signals, classification, evidence });
+
+  let signals: RepoSignals;
+  let classification: RepoClassificationResult;
+  let archetypes: ArchetypeMatchResult[];
+  let findings: ScanFinding[];
+  let evidence: EvidenceRecord[];
+
+  try {
+    const extraction = await extractRepoSignals(files, env.AI_PROVIDER);
+    signals = extraction.signals;
+    classification = extraction.classification;
+    archetypes = extraction.archetypes;
+    findings = extraction.findings;
+    evidence = extraction.evidence;
+  } catch {
+    const scanned = scanRepositoryFiles(files);
+    signals = scanned.signals;
+    findings = scanned.findings;
+    evidence = scanned.evidence;
+    classification = classifyRepository(signals);
+    archetypes = matchArchetypes({ signals, classification, evidence });
+  }
+
   const recommendations = scorePlatforms({ signals, classification, evidence, archetypes });
   const plan = createPlanFromSnapshot(findings, recommendations, classification, archetypes, signals);
 
@@ -420,6 +514,11 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
     return null;
   }
 
+  // If the persisted scan was produced by an older pipeline version, invalidate it
+  if (scan.recommendationVersion?.label !== ACTIVE_RECOMMENDATION_VERSION.label) {
+    return null;
+  }
+
   const normalizedSignals = normalizeRepoSignals(scan.summaryJson);
 
   const recommendations = scan.platformScores.map(hydratePlatformRecommendation);
@@ -488,7 +587,7 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
     plan?.score === fallbackPlan.score &&
     Math.abs((plan?.confidence ?? 0) - fallbackPlan.confidence) < 0.001;
 
-  const hydratedPlan =
+  const hydratedPlan: DeploymentPlanSnapshot =
     storedPlanMatchesLatestScan && plan
       ? {
           title: plan.title,
@@ -498,7 +597,10 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
           confidence: plan.confidence,
           blockers: normalizeStringArray(storedPlanJson?.blockers),
           warnings: normalizeStringArray(storedPlanJson?.warnings),
-          steps: normalizeSteps(storedPlanJson?.steps ?? storedPlanJson?.nextSteps)
+          nextSteps: normalizeStringArray(storedPlanJson?.nextSteps),
+          fitType: (storedPlanJson?.fitType as PlanFitType | undefined) ?? fallbackPlan.fitType,
+          altPaths: normalizeStringArray(storedPlanJson?.altPaths),
+          envProviders: getEnvProviderSuggestions(normalizedSignals.envVars)
         }
       : fallbackPlan;
 
@@ -644,7 +746,9 @@ async function persistRepositoryAnalysis(snapshot: RepositoryAnalysisSnapshot) {
         planJson: {
           blockers: snapshot.plan.blockers,
           warnings: snapshot.plan.warnings,
-          steps: snapshot.plan.steps
+          nextSteps: snapshot.plan.nextSteps,
+          fitType: snapshot.plan.fitType,
+          altPaths: snapshot.plan.altPaths
         } as Prisma.InputJsonValue
       }
     });

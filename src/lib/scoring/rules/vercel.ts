@@ -4,7 +4,7 @@ export const vercelRule: PlatformRule = {
   platform: "Vercel",
   score(context) {
     const { signals } = context;
-    let score = 14;
+    let score = 10;
 
     if (hasArchetype(context, "nextjs_standard_app")) score += 54;
     if (hasArchetype(context, "cloudflare_worker_app")) score -= 14;

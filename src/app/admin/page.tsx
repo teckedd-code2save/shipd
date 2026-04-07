@@ -1,256 +1,195 @@
 import { redirect } from "next/navigation";
-import type { Metadata } from "next";
 import { auth } from "@/auth";
-import { getPrismaClient } from "@/lib/db/prisma";
-import { hasDatabaseEnv } from "@/lib/env";
-import { isAdmin } from "@/config/plans";
-import { Plan } from "@/generated/prisma/client";
 import { SiteHeader } from "@/components/layout/site-header";
-import { setUserPlanAction, resetUserQuotaAction } from "./actions";
+import {
+  getOverviewMetrics,
+  getTopUsers,
+  getDailyScanCounts,
+  getPlatformStats,
+  getRecentScans,
+} from "@/server/services/metrics-service";
 
-export const metadata: Metadata = { title: "Admin — Shipd" };
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 
-const PLAN_LABELS: Record<Plan, string> = { FREE: "Free", PRO: "Pro", TEAM: "Team" };
+function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <div className="admin-stat-card">
+      <div className="admin-stat-label">{label}</div>
+      <div className="admin-stat-value">{value}</div>
+      {sub ? <div className="admin-stat-sub">{sub}</div> : null}
+    </div>
+  );
+}
+
+function Sparkline({ data }: { data: { date: string; count: number }[] }) {
+  const max = Math.max(...data.map((d) => d.count), 1);
+  return (
+    <div className="admin-sparkline" title="Scans per day (last 14 days)">
+      {data.map((d) => (
+        <div
+          key={d.date}
+          className="admin-sparkline-bar"
+          style={{ height: `${Math.max(2, (d.count / max) * 40)}px` }}
+          title={`${d.date}: ${d.count} scan${d.count !== 1 ? "s" : ""}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function timeAgo(date: Date | null): string {
+  if (!date) return "—";
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 export default async function AdminPage() {
   const session = await auth();
 
-  if (!isAdmin(session?.user?.email)) {
+  if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
     redirect("/dashboard");
   }
 
-  if (!hasDatabaseEnv()) {
-    return (
-      <>
-        <SiteHeader />
-        <main className="page" style={{ paddingTop: 80 }}>
-          <p className="muted">No database configured — admin panel unavailable in this environment.</p>
-        </main>
-      </>
-    );
-  }
-
-  const prisma = getPrismaClient();
-
-  const [users, scanStats] = await Promise.all([
-    prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        plan: true,
-        planScanCount: true,
-        planPrivateScanCount: true,
-        planScanResetAt: true,
-        createdAt: true,
-      },
-    }),
-    prisma.user.groupBy({
-      by: ["plan"],
-      _count: { id: true },
-    }),
+  const [overview, topUsers, dailyScans, platformStats, recentScans] = await Promise.all([
+    getOverviewMetrics(),
+    getTopUsers(25),
+    getDailyScanCounts(14),
+    getPlatformStats(),
+    getRecentScans(30),
   ]);
 
-  const planCounts = Object.fromEntries(
-    scanStats.map((s) => [s.plan, s._count.id])
-  ) as Record<Plan, number>;
+  const totalThisWeek = dailyScans.slice(-7).reduce((s, d) => s + d.count, 0);
 
   return (
     <>
       <SiteHeader />
-      <main className="page" style={{ paddingTop: 48, paddingBottom: 80 }}>
-        <div style={{ marginBottom: 40 }}>
-          <div
-            style={{
-              fontSize: 10,
-              letterSpacing: 2,
-              textTransform: "uppercase",
-              color: "#e8ff47",
-              fontFamily: "var(--font-mono)",
-              marginBottom: 8,
-            }}
-          >
-            {"// admin"}
-          </div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>
-            Admin Panel
+      <main className="page">
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 700, letterSpacing: "-0.04em", marginBottom: 6, marginTop: 0 }}>
+            Metrics
           </h1>
-          <p className="muted" style={{ fontSize: 13 }}>
-            Logged in as {session?.user?.email}
-          </p>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>Live usage stats — visible to admins only.</p>
         </div>
 
-        {/* Stats */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 1,
-            background: "var(--border)",
-            border: "1px solid var(--border)",
-            marginBottom: 40,
-          }}
-        >
-          {(["FREE", "PRO", "TEAM"] as Plan[]).map((p) => (
-            <div
-              key={p}
-              style={{
-                background: "var(--bg-surface)",
-                padding: "24px 28px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10,
-                  letterSpacing: 2,
-                  textTransform: "uppercase",
-                  color: "var(--text-secondary)",
-                  marginBottom: 8,
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                {PLAN_LABELS[p]}
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 700 }}>
-                {planCounts[p] ?? 0}
-              </div>
-              <div className="muted" style={{ fontSize: 11 }}>
-                users
-              </div>
+        {/* Overview stats */}
+        <div className="admin-stats-grid">
+          <StatCard label="Total users" value={overview.totalUsers} sub={`+${overview.newUsersThisWeek} this week`} />
+          <StatCard label="Active users (7d)" value={overview.activeUsersThisWeek} sub="ran at least one scan" />
+          <StatCard label="Total scans" value={overview.totalScans} sub={`${overview.scansThisWeek} this week`} />
+          <StatCard label="Chat messages" value={overview.totalChatMessages} sub="from users (all time)" />
+          <StatCard label="Repositories" value={overview.totalRepositories} />
+        </div>
+
+        {/* Scan activity sparkline */}
+        <div className="panel admin-section" style={{ marginBottom: 24 }}>
+          <div className="admin-section-head">
+            <div>
+              <div className="admin-section-title">Scan activity</div>
+              <div className="admin-section-sub">{totalThisWeek} scans in the last 7 days</div>
             </div>
-          ))}
+          </div>
+          <Sparkline data={dailyScans} />
+          <div className="admin-sparkline-dates">
+            <span>{dailyScans[0]?.date}</span>
+            <span>{dailyScans[dailyScans.length - 1]?.date}</span>
+          </div>
         </div>
 
-        {/* Users table */}
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            overflowX: "auto",
-          }}
-        >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontFamily: "var(--font-mono)",
-              fontSize: 12,
-            }}
-          >
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                {["Email", "Plan", "Public scans", "Private scans", "Reset date", "Actions"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "12px 16px",
-                        textAlign: "left",
-                        color: "var(--text-secondary)",
-                        fontWeight: 500,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr
-                  key={user.id}
-                  style={{ borderBottom: "1px solid var(--border)" }}
-                >
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      color: "var(--text-primary)",
-                      maxWidth: 220,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {user.email ?? user.name ?? user.id}
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span
-                      style={{
-                        color: user.plan === "FREE" ? "var(--text-secondary)" : "#e8ff47",
-                        fontWeight: user.plan !== "FREE" ? 600 : 400,
-                      }}
-                    >
-                      {user.plan}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px 16px", color: "var(--text-secondary)" }}>
-                    {user.planScanCount}
-                  </td>
-                  <td style={{ padding: "12px 16px", color: "var(--text-secondary)" }}>
-                    {user.planPrivateScanCount}
-                  </td>
-                  <td style={{ padding: "12px 16px", color: "var(--text-secondary)" }}>
-                    {user.planScanResetAt.toISOString().slice(0, 10)}
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {/* Plan override */}
-                      {(["FREE", "PRO", "TEAM"] as Plan[])
-                        .filter((p) => p !== user.plan)
-                        .map((p) => (
-                          <form key={p} action={setUserPlanAction.bind(null, user.id, p)}>
-                            <button
-                              type="submit"
-                              style={{
-                                fontFamily: "var(--font-mono)",
-                                fontSize: 10,
-                                padding: "4px 10px",
-                                background: "transparent",
-                                border: "1px solid var(--border)",
-                                color: "var(--text-secondary)",
-                                cursor: "pointer",
-                                letterSpacing: 1,
-                              }}
-                            >
-                              → {p}
-                            </button>
-                          </form>
-                        ))}
-                      {/* Reset quota */}
-                      <form action={resetUserQuotaAction.bind(null, user.id)}>
-                        <button
-                          type="submit"
-                          style={{
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 10,
-                            padding: "4px 10px",
-                            background: "transparent",
-                            border: "1px solid var(--border)",
-                            color: "#666",
-                            cursor: "pointer",
-                            letterSpacing: 1,
-                          }}
-                        >
-                          reset quota
-                        </button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
+        <div className="admin-two-col">
+          {/* Platform distribution */}
+          <div className="panel admin-section">
+            <div className="admin-section-head">
+              <div className="admin-section-title">Top recommended platforms</div>
+            </div>
+            <div className="admin-platform-list">
+              {platformStats.slice(0, 10).map((p) => (
+                <div key={p.platform} className="admin-platform-row">
+                  <span className="admin-platform-name">{p.platform}</span>
+                  <span className="admin-platform-count">{p.count}</span>
+                  <div
+                    className="admin-platform-bar"
+                    style={{ width: `${(p.count / (platformStats[0]?.count ?? 1)) * 100}%` }}
+                  />
+                </div>
               ))}
-            </tbody>
-          </table>
-          {users.length === 0 && (
-            <p
-              className="muted"
-              style={{ padding: "24px 16px", fontSize: 13, textAlign: "center" }}
-            >
-              No users yet.
-            </p>
-          )}
+              {platformStats.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No data yet.</div>}
+            </div>
+          </div>
+
+          {/* Recent scans feed */}
+          <div className="panel admin-section">
+            <div className="admin-section-head">
+              <div className="admin-section-title">Recent scans</div>
+            </div>
+            <div className="admin-feed">
+              {recentScans.map((s) => (
+                <div key={s.scanId} className="admin-feed-row">
+                  <div className="admin-feed-repo">{s.repoFullName}</div>
+                  <div className="admin-feed-meta">
+                    <span className="admin-feed-user">{s.userName ?? s.userEmail ?? "unknown"}</span>
+                    {s.topPlatform ? <span className="admin-feed-platform">{s.topPlatform}</span> : null}
+                    {s.framework ? <span className="admin-feed-framework">{s.framework}</span> : null}
+                  </div>
+                  <div className="admin-feed-time">{timeAgo(s.scannedAt)}</div>
+                </div>
+              ))}
+              {recentScans.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No scans yet.</div>}
+            </div>
+          </div>
+        </div>
+
+        {/* Top users table */}
+        <div className="panel admin-section">
+          <div className="admin-section-head">
+            <div className="admin-section-title">Users</div>
+            <div className="admin-section-sub">{overview.totalUsers} total</div>
+          </div>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Repos</th>
+                  <th>Scans</th>
+                  <th>Chats</th>
+                  <th>Last active</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topUsers.map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <div className="admin-user-cell">
+                        {u.image ? (
+                          <img src={u.image} alt="" className="admin-user-avatar" />
+                        ) : (
+                          <div className="admin-user-avatar admin-user-avatar-placeholder">
+                            {(u.name ?? u.email ?? "?")[0].toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div className="admin-user-name">{u.name ?? "—"}</div>
+                          <div className="admin-user-email">{u.email ?? "—"}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{u.repoCount}</td>
+                    <td><strong>{u.scanCount}</strong></td>
+                    <td>{u.chatCount}</td>
+                    <td>{timeAgo(u.lastActiveAt)}</td>
+                  </tr>
+                ))}
+                {topUsers.length === 0 && (
+                  <tr><td colSpan={5} className="muted" style={{ fontSize: 13 }}>No users yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
     </>

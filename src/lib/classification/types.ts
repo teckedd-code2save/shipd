@@ -7,6 +7,7 @@ export type RepoClass =
   | "library_or_package"
   | "notebook_repo"
   | "infra_only"
+  | "cli_tool"
   | "insufficient_evidence";
 
 export interface RepoClassificationResult {

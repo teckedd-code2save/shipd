@@ -1,5 +1,5 @@
 export interface RepoSignals {
-  repoTopology?: "single_app" | "monorepo" | "infra_only" | "unknown";
+  repoTopology?: "single_app" | "monorepo" | "dotnet_solution" | "infra_only" | "unknown";
   workspaceRoots: string[];
   appRoots: string[];
   primaryAppRoot?: string;
@@ -52,6 +52,14 @@ export interface RepoSignals {
   javaProjectFiles: string[];
   rustProjectFiles: string[];
   phpProjectFiles: string[];
+  orm?: "prisma" | "drizzle" | "typeorm" | "sequelize" | "mongoose"
+      | "sqlalchemy" | "django"
+      | "activerecord"
+      | "gorm"
+      | "hibernate" | "jpa"
+      | "efcore"
+      | "eloquent";
+  hasMigrations: boolean;
   notebookFiles: string[];
   scannedFiles: number;
 }
