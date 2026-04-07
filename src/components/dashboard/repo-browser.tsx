@@ -145,8 +145,8 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
                 <SparklesIcon size={15} style={{ color: "var(--accent-blue)" }} />
                 <span>
                   {repo.topPlatform
-                    ? `Planning starts from the saved ${repo.topPlatform} recommendation${repo.primaryAppRoot ? ` for ${formatRoot(repo.primaryAppRoot)}` : ""}.`
-                    : "Open the deployment workspace to run the first scan and compare options."}
+                    ? `Best fit: ${repo.topPlatform}`
+                    : "No scan yet — open to run first analysis."}
                 </span>
               </div>
               <Link href={`/chat/${repo.id}`} className="repo-plan-button">

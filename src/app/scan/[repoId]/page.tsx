@@ -54,9 +54,11 @@ export default async function ScanPage({
             <span>Scan details come from the same saved deployment workspace.</span>
           </div>
         </div>
-        <h1 style={{ fontSize: 28, marginBottom: 8 }}>What Shipd detected</h1>
-        <p className="muted" style={{ marginBottom: 24 }}>
-          Everything Shipd found when analysing {repoLabel}
+        <h1 style={{ fontSize: "clamp(22px, 4vw, 30px)", letterSpacing: "-0.03em", marginBottom: 6, marginTop: 0 }}>
+          What Shipd detected
+        </h1>
+        <p className="muted" style={{ marginBottom: 20, fontSize: 14 }}>
+          {repoLabel}
         </p>
         <section className="panel" style={{ padding: 18, marginBottom: 18, display: "grid", gap: 10 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
