@@ -1,0 +1,11 @@
+-- CreateEnum
+CREATE TYPE "Plan" AS ENUM ('FREE', 'PRO', 'TEAM');
+
+-- AlterTable
+ALTER TABLE "Repository" ADD COLUMN     "isPrivate" BOOLEAN NOT NULL DEFAULT false;
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "plan" "Plan" NOT NULL DEFAULT 'FREE',
+ADD COLUMN     "planPrivateScanCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "planScanCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "planScanResetAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

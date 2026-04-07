@@ -4,7 +4,9 @@ import { formatArchetypeLabel, formatRepoClassLabel, formatSeverityLabel, format
 import { SiteHeader } from "@/components/layout/site-header";
 import { ArrowLeftIcon, SparklesIcon } from "@/components/ui/icons";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
+import { PlanLimitError } from "@/server/services/plan-limit-service";
 import { findRepositoryById } from "@/server/services/repository-service";
+import { UpgradePrompt } from "@/components/billing/upgrade-prompt";
 
 function formatRoot(value?: string) {
   if (!value) return "Not selected";
@@ -17,10 +19,25 @@ export default async function ScanPage({
   params: Promise<{ repoId: string }>;
 }) {
   const { repoId } = await params;
-  const [analysis, repository] = await Promise.all([
-    getRepositoryAnalysis(repoId),
-    findRepositoryById(repoId)
-  ]);
+
+  let analysis: Awaited<ReturnType<typeof getRepositoryAnalysis>>;
+  try {
+    analysis = await getRepositoryAnalysis(repoId);
+  } catch (err) {
+    if (err instanceof PlanLimitError) {
+      return (
+        <>
+          <SiteHeader />
+          <main className="page">
+            <UpgradePrompt kind={err.kind} />
+          </main>
+        </>
+      );
+    }
+    throw err;
+  }
+
+  const repository = await findRepositoryById(repoId);
   const repoLabel = repository ? `${repository.owner}/${repository.name}` : repoId;
 
   return (

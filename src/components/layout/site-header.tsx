@@ -28,6 +28,9 @@ export async function SiteHeader() {
           <Link href="/dashboard" className="site-header-link">
             Dashboard
           </Link>
+          <Link href="/pricing" className="site-header-link">
+            Pricing
+          </Link>
           {isAdmin ? (
             <Link href="/admin" className="site-header-link">
               Metrics
