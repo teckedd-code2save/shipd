@@ -63,8 +63,6 @@ export function HowItWorks() {
               setPhase("out");
               setTimeout(() => {
                 setActive(i);
-                setProgress(0);
-                startRef.current = null;
                 setPhase("in");
               }, 160);
             }}
