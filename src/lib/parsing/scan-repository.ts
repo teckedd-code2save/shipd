@@ -1,15 +1,10 @@
 import { parseDockerfile } from "@/lib/parsing/dockerfile";
 import { parseEnvFile } from "@/lib/parsing/env-file";
-import { parseGoProject } from "@/lib/parsing/go-project";
 import { parseInfrastructureFile } from "@/lib/parsing/infrastructure";
-import { parseJavaProject } from "@/lib/parsing/java-project";
 import { parsePackageJson } from "@/lib/parsing/package-json";
 import { detectPlatformConfig } from "@/lib/parsing/platform-config";
 import { parseNotebookFile, parsePythonProject } from "@/lib/parsing/python-project";
-import { parsePhpProject } from "@/lib/parsing/php-project";
 import { parseReadme } from "@/lib/parsing/readme";
-import { parseRubyProject } from "@/lib/parsing/ruby-project";
-import { parseRustProject } from "@/lib/parsing/rust-project";
 import { parseWorkflow } from "@/lib/parsing/workflow";
 import type { EvidenceRecord, RepositoryFileMap, ScanFinding } from "@/lib/parsing/shared";
 import type { RepoSignals } from "@/lib/parsing/types";
@@ -22,14 +17,14 @@ function chooseFramework(current: RepoSignals["framework"], next: RepoSignals["f
   const rank: Record<NonNullable<RepoSignals["framework"]>, number> = {
     unknown: 0,
     react: 1,
+    go: 2,
+    rust: 2,
+    java: 2,
+    ruby: 2,
+    php: 2,
     express: 3,
     python: 3,
     csharp: 3,
-    go: 3,
-    rust: 3,
-    ruby: 3,
-    java: 3,
-    php: 3,
     astro: 3,
     remix: 4,
     sveltekit: 4,
@@ -87,6 +82,8 @@ function mergeSignals(base: RepoSignals, next: Partial<RepoSignals>): RepoSignal
     javaProjectFiles: Array.from(new Set([...base.javaProjectFiles, ...(next.javaProjectFiles ?? [])])),
     rustProjectFiles: Array.from(new Set([...base.rustProjectFiles, ...(next.rustProjectFiles ?? [])])),
     phpProjectFiles: Array.from(new Set([...base.phpProjectFiles, ...(next.phpProjectFiles ?? [])])),
+    orm: next.orm ?? base.orm,
+    hasMigrations: next.hasMigrations ?? base.hasMigrations,
     notebookFiles: Array.from(new Set([...base.notebookFiles, ...(next.notebookFiles ?? [])])),
     scannedFiles: Math.max(base.scannedFiles, next.scannedFiles ?? base.scannedFiles)
   };
@@ -137,13 +134,6 @@ function scoreCandidateRoot(filePath: string, evidenceKind?: EvidenceRecord["kin
   if (filePath.endsWith("/Program.cs") || filePath === "Program.cs") score += 5;
   if (filePath.endsWith("/main.py") || filePath.endsWith("/app.py") || filePath.endsWith("/asgi.py") || filePath.endsWith("/wsgi.py")) score += 5;
   if (filePath.endsWith("/pyproject.toml") || filePath.endsWith("/requirements.txt")) score += 3;
-  if (filePath.endsWith(".sln")) score += 5;
-  if (filePath === "appsettings.json" || filePath.endsWith("/appsettings.json")) score += 4;
-  if (filePath === "go.mod" || filePath.endsWith("/go.mod")) score += 4;
-  if (filePath === "Gemfile" || filePath.endsWith("/Gemfile")) score += 4;
-  if (filePath === "pom.xml" || filePath.endsWith("/pom.xml") || filePath === "build.gradle" || filePath.endsWith("/build.gradle")) score += 4;
-  if (filePath === "Cargo.toml" || filePath.endsWith("/Cargo.toml")) score += 4;
-  if (filePath === "composer.json" || filePath.endsWith("/composer.json")) score += 4;
   if (evidenceKind === "framework") score += 4;
   if (evidenceKind === "entrypoint") score += 4;
   if (evidenceKind === "platform_config") score += 4;
@@ -182,6 +172,8 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
     javaProjectFiles: [],
     rustProjectFiles: [],
     phpProjectFiles: [],
+    orm: undefined,
+    hasMigrations: false,
     notebookFiles: [],
     scannedFiles: Object.keys(files).length
   };
@@ -302,6 +294,19 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
           }
         });
       }
+      // ORM detection from package.json deps
+      if (!signals.orm) {
+        const hasPrisma = content.includes('"prisma"') || content.includes('"@prisma/client"');
+        const hasDrizzle = content.includes('"drizzle-orm"');
+        const hasTypeorm = content.includes('"typeorm"');
+        const hasSequelize = content.includes('"sequelize"');
+        const hasMongoose = content.includes('"mongoose"');
+        if (hasPrisma) signals = mergeSignals(signals, { orm: "prisma", hasMigrations: true });
+        else if (hasDrizzle) signals = mergeSignals(signals, { orm: "drizzle", hasMigrations: true });
+        else if (hasTypeorm) signals = mergeSignals(signals, { orm: "typeorm", hasMigrations: true });
+        else if (hasSequelize) signals = mergeSignals(signals, { orm: "sequelize", hasMigrations: true });
+        else if (hasMongoose) signals = mergeSignals(signals, { orm: "mongoose", hasMigrations: false });
+      }
       continue;
     }
 
@@ -382,6 +387,14 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         }
       );
       registerCandidateRoot(filePath, "framework");
+      // Python ORM detection from file content
+      if (!signals.orm) {
+        if (content.includes("sqlalchemy") || content.includes("SQLAlchemy")) {
+          signals = mergeSignals(signals, { orm: "sqlalchemy" as RepoSignals["orm"], hasMigrations: true });
+        } else if (content.includes("django")) {
+          signals = mergeSignals(signals, { orm: "django" as RepoSignals["orm"], hasMigrations: true });
+        }
+      }
       continue;
     }
 
@@ -434,102 +447,10 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         title: "Python application entrypoint detected",
         detail: `${filePath} suggests this repository contains a runnable Python service entrypoint.`
       });
-      continue;
-    }
-
-    if (filePath === "main.go" || filePath.endsWith("/main.go")) {
-      signals = mergeSignals(signals, {
-        deploymentDescriptorFiles: [filePath],
-        framework: signals.framework === "unknown" ? "go" : signals.framework,
-        runtime: signals.runtime === "unknown" ? "go" : signals.runtime
-      });
-      evidence.push({
-        kind: "entrypoint",
-        value: filePath,
-        sourceFile: filePath,
-        confidence: 0.86,
-        metadata: { appRoot: inferAppRootFromPath(filePath) }
-      });
-      registerCandidateRoot(filePath, "entrypoint");
-      findings.push({
-        filePath,
-        severity: "ok",
-        title: "Go application entrypoint detected",
-        detail: `${filePath} suggests this repository contains a runnable Go service.`
-      });
-      continue;
-    }
-
-    if (filePath === "config.ru" || filePath.endsWith("/config.ru")) {
-      signals = mergeSignals(signals, {
-        deploymentDescriptorFiles: [filePath],
-        framework: signals.framework === "unknown" ? "ruby" : signals.framework,
-        runtime: signals.runtime === "unknown" ? "ruby" : signals.runtime
-      });
-      evidence.push({
-        kind: "entrypoint",
-        value: filePath,
-        sourceFile: filePath,
-        confidence: 0.86,
-        metadata: { appRoot: inferAppRootFromPath(filePath) }
-      });
-      registerCandidateRoot(filePath, "entrypoint");
-      findings.push({
-        filePath,
-        severity: "ok",
-        title: "Ruby Rack entrypoint detected",
-        detail: `${filePath} is a Rack config file used as the entrypoint for Ruby web services.`
-      });
-      continue;
-    }
-
-    if (filePath.endsWith(".sln")) {
-      signals = mergeSignals(signals, {
-        framework: "csharp",
-        runtime: "dotnet",
-        csharpProjectFiles: [filePath],
-        deploymentDescriptorFiles: [filePath]
-      });
-      evidence.push(
-        {
-          kind: "framework",
-          value: "csharp",
-          sourceFile: filePath,
-          confidence: 0.92,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        },
-        {
-          kind: "runtime",
-          value: "dotnet",
-          sourceFile: filePath,
-          confidence: 0.92,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        }
-      );
-      registerCandidateRoot(filePath, "framework");
-      findings.push({
-        filePath,
-        severity: "ok",
-        title: ".NET solution file detected",
-        detail: `${filePath} identifies a .NET solution in this repository.`
-      });
-      continue;
-    }
-
-    if (filePath === "appsettings.json" || filePath.endsWith("/appsettings.json")) {
-      signals = mergeSignals(signals, {
-        framework: signals.framework === "unknown" ? "csharp" : signals.framework,
-        runtime: signals.runtime === "unknown" ? "dotnet" : signals.runtime,
-        dotnetAppType: "web"
-      });
-      evidence.push({
-        kind: "framework",
-        value: "aspnet_core",
-        sourceFile: filePath,
-        confidence: 0.88,
-        metadata: { appRoot: inferAppRootFromPath(filePath) }
-      });
-      registerCandidateRoot(filePath, "framework");
+      // manage.py is a Django signal — Django ORM runs migrations via manage.py migrate
+      if (!signals.orm && (filePath.endsWith("/manage.py") || filePath === "manage.py")) {
+        signals = mergeSignals(signals, { orm: "django", hasMigrations: true });
+      }
       continue;
     }
 
@@ -568,6 +489,109 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
         title: "C# project manifest detected",
         detail: `${filePath} identifies a .NET project in this repository.`
       });
+      // EF Core detection from .csproj content
+      if (!signals.orm && (content.includes("EntityFrameworkCore") || content.includes("Microsoft.EntityFrameworkCore"))) {
+        signals = mergeSignals(signals, { orm: "efcore", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (filePath === "Gemfile" || filePath.endsWith("/Gemfile")) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "ruby" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "ruby" : signals.runtime,
+        rubyProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        { kind: "framework", value: "ruby", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } },
+        { kind: "runtime", value: "ruby", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } }
+      );
+      registerCandidateRoot(filePath, "framework");
+      // ActiveRecord (Rails) detection
+      if (!signals.orm && (content.includes("'rails'") || content.includes('"rails"') || content.includes("activerecord"))) {
+        signals = mergeSignals(signals, { orm: "activerecord", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (
+      filePath === "pom.xml" || filePath.endsWith("/pom.xml") ||
+      filePath === "build.gradle" || filePath.endsWith("/build.gradle") ||
+      filePath === "build.gradle.kts" || filePath.endsWith("/build.gradle.kts")
+    ) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "java" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "java" : signals.runtime,
+        javaProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        { kind: "framework", value: "java", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } },
+        { kind: "runtime", value: "java", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } }
+      );
+      registerCandidateRoot(filePath, "framework");
+      // Hibernate/JPA detection
+      if (!signals.orm && (content.includes("hibernate") || content.includes("spring-data-jpa") || content.includes("jakarta.persistence"))) {
+        signals = mergeSignals(signals, { orm: "hibernate", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (filePath === "composer.json" || filePath.endsWith("/composer.json")) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "php" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "php" : signals.runtime,
+        phpProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        { kind: "framework", value: "php", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } },
+        { kind: "runtime", value: "php", sourceFile: filePath, confidence: 0.9, metadata: { appRoot: inferAppRootFromPath(filePath) } }
+      );
+      registerCandidateRoot(filePath, "framework");
+      // Eloquent (Laravel) detection
+      if (!signals.orm && (content.includes("laravel/framework") || content.includes("illuminate/database"))) {
+        signals = mergeSignals(signals, { orm: "eloquent", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (filePath === "go.mod" || filePath === "go.sum") {
+      signals = mergeSignals(signals, {
+        framework: "go",
+        runtime: "go",
+        goProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push({
+        kind: "runtime",
+        value: "go",
+        sourceFile: filePath,
+        confidence: 0.92,
+        metadata: { label: "Go module" }
+      });
+      registerCandidateRoot(filePath, "runtime");
+      // GORM detection from go.mod content
+      if (!signals.orm && content.includes("gorm.io/gorm")) {
+        signals = mergeSignals(signals, { orm: "gorm", hasMigrations: true });
+      }
+      continue;
+    }
+
+    if (filePath === "Cargo.toml") {
+      signals = mergeSignals(signals, {
+        framework: "rust",
+        runtime: "rust",
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push({
+        kind: "runtime",
+        value: "rust",
+        sourceFile: filePath,
+        confidence: 0.92,
+        metadata: { label: "Rust project" }
+      });
       continue;
     }
 
@@ -597,130 +621,17 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
       continue;
     }
 
-    if (filePath === "go.mod" || filePath.endsWith("/go.mod")) {
-      const result = parseGoProject(content, filePath);
-      signals = mergeSignals(signals, result.signals);
-      findings.push(...result.findings);
-      evidence.push(
-        {
-          kind: "framework",
-          value: "go",
-          sourceFile: filePath,
-          confidence: 0.92,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        },
-        {
-          kind: "runtime",
-          value: "go",
-          sourceFile: filePath,
-          confidence: 0.92,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        }
-      );
-      registerCandidateRoot(filePath, "framework");
+    if (filePath === "prisma/schema.prisma" || filePath.endsWith("/schema.prisma")) {
+      signals = mergeSignals(signals, { orm: "prisma", hasMigrations: true });
+      evidence.push({ kind: "orm" as EvidenceRecord["kind"], value: "prisma", sourceFile: filePath, confidence: 0.98 });
+      findings.push({ filePath, severity: "ok", title: "Prisma schema detected", detail: "Run `prisma migrate deploy` during deployment to apply pending migrations." });
       continue;
     }
 
-    if (filePath === "Gemfile" || filePath.endsWith("/Gemfile")) {
-      const result = parseRubyProject(content, filePath);
-      signals = mergeSignals(signals, result.signals);
-      findings.push(...result.findings);
-      evidence.push(
-        {
-          kind: "framework",
-          value: "ruby",
-          sourceFile: filePath,
-          confidence: 0.9,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        },
-        {
-          kind: "runtime",
-          value: "ruby",
-          sourceFile: filePath,
-          confidence: 0.9,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        }
-      );
-      registerCandidateRoot(filePath, "framework");
-      continue;
-    }
-
-    if (
-      filePath === "pom.xml" ||
-      filePath.endsWith("/pom.xml") ||
-      filePath === "build.gradle" ||
-      filePath.endsWith("/build.gradle") ||
-      filePath === "build.gradle.kts" ||
-      filePath.endsWith("/build.gradle.kts")
-    ) {
-      const result = parseJavaProject(content, filePath);
-      signals = mergeSignals(signals, result.signals);
-      findings.push(...result.findings);
-      evidence.push(
-        {
-          kind: "framework",
-          value: "java",
-          sourceFile: filePath,
-          confidence: 0.9,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        },
-        {
-          kind: "runtime",
-          value: "java",
-          sourceFile: filePath,
-          confidence: 0.9,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        }
-      );
-      registerCandidateRoot(filePath, "framework");
-      continue;
-    }
-
-    if (filePath === "Cargo.toml" || filePath.endsWith("/Cargo.toml")) {
-      const result = parseRustProject(content, filePath);
-      signals = mergeSignals(signals, result.signals);
-      findings.push(...result.findings);
-      evidence.push(
-        {
-          kind: "framework",
-          value: "rust",
-          sourceFile: filePath,
-          confidence: 0.92,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        },
-        {
-          kind: "runtime",
-          value: "rust",
-          sourceFile: filePath,
-          confidence: 0.92,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        }
-      );
-      registerCandidateRoot(filePath, "framework");
-      continue;
-    }
-
-    if (filePath === "composer.json" || filePath.endsWith("/composer.json")) {
-      const result = parsePhpProject(content, filePath);
-      signals = mergeSignals(signals, result.signals);
-      findings.push(...result.findings);
-      evidence.push(
-        {
-          kind: "framework",
-          value: "php",
-          sourceFile: filePath,
-          confidence: 0.9,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        },
-        {
-          kind: "runtime",
-          value: "php",
-          sourceFile: filePath,
-          confidence: 0.9,
-          metadata: { appRoot: inferAppRootFromPath(filePath) }
-        }
-      );
-      registerCandidateRoot(filePath, "framework");
+    if (filePath.startsWith("drizzle.config")) {
+      signals = mergeSignals(signals, { orm: "drizzle", hasMigrations: true });
+      evidence.push({ kind: "orm" as EvidenceRecord["kind"], value: "drizzle", sourceFile: filePath, confidence: 0.96 });
+      findings.push({ filePath, severity: "ok", title: "Drizzle ORM config detected", detail: "Run `drizzle-kit migrate` or `drizzle-kit push` to apply schema changes." });
       continue;
     }
 

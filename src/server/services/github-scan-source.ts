@@ -7,7 +7,6 @@ const SCAN_TARGETS = [
   "pnpm-workspace.yaml",
   "pnpm-workspace.yml",
   "nx.json",
-  "*.csproj",
   "pyproject.toml",
   "requirements.txt",
   "Pipfile",
@@ -19,18 +18,36 @@ const SCAN_TARGETS = [
   "asgi.py",
   "manage.py",
   "Program.cs",
+  "go.mod",
+  "go.sum",
+  "Cargo.toml",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "global.json",
+  "Directory.Build.props",
+  "Directory.Packages.props",
   "Dockerfile",
   ".env.example",
   ".env.sample",
+  ".env.local",
+  ".env.development",
+  ".env.test",
   "README.md",
   "vercel.json",
   "fly.toml",
+  "railway.toml",
   "railway.json",
   "render.yaml",
   "render.yml",
   "netlify.toml",
   "wrangler.toml",
   "Procfile",
+  "apprunner.yaml",
+  "apprunner.yml",
+  "app.yaml",
+  ".do/app.yaml",
+  "azure.yaml",
   "docker-compose.yml",
   "docker-compose.yaml",
   "compose.yml",
@@ -38,7 +55,13 @@ const SCAN_TARGETS = [
   "next.config.js",
   "next.config.mjs",
   "next.config.ts",
-  "tsconfig.json"
+  "tsconfig.json",
+  "prisma/schema.prisma",
+  "drizzle.config.ts",
+  "drizzle.config.js",
+  "drizzle.config.mjs",
+  "Gemfile",
+  "composer.json"
 ] as const;
 
 const WORKSPACE_DIRECTORIES = ["apps", "packages", "services", "sites"] as const;
@@ -60,12 +83,21 @@ const WORKSPACE_SCAN_TARGETS = [
   "wsgi.py",
   "asgi.py",
   "manage.py",
+  "go.mod",
+  "go.sum",
+  "Cargo.toml",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
   "Dockerfile",
   ".env.example",
   ".env.sample",
+  ".env.local",
+  ".env.development",
   "README.md",
   "vercel.json",
   "fly.toml",
+  "railway.toml",
   "railway.json",
   "render.yaml",
   "render.yml",
@@ -78,8 +110,77 @@ const WORKSPACE_SCAN_TARGETS = [
   "tsconfig.json"
 ] as const;
 
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".cs"] as const;
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".cs", ".go", ".rs", ".java"] as const;
 const SOURCE_DIRECTORIES = ["src", "app", "pages", "api", "controllers"] as const;
+
+const MAX_DOTNET_PROJECT_FILES = 12;
+
+function isDotnetProjectFile(name: string) {
+  return name.endsWith(".sln") || name.endsWith(".csproj");
+}
+
+async function collectDotnetProjectFiles(args: {
+  token: string;
+  owner: string;
+  repo: string;
+  rootEntries: Array<{ type: string; path: string; name: string }>;
+  defaultBranch?: string;
+}): Promise<string[]> {
+  const paths: string[] = [];
+
+  // Collect .sln and .csproj from root
+  for (const entry of args.rootEntries) {
+    if (paths.length >= MAX_DOTNET_PROJECT_FILES) break;
+    if (entry.type === "file" && isDotnetProjectFile(entry.name)) {
+      paths.push(entry.path);
+    }
+  }
+
+  // Walk one level into subdirectories (e.g. src/ProjectName/ProjectName.csproj)
+  const subdirs = args.rootEntries.filter((e) => e.type === "dir").slice(0, 10);
+
+  for (const dir of subdirs) {
+    if (paths.length >= MAX_DOTNET_PROJECT_FILES) break;
+    try {
+      const entries = await listRepositoryDirectory(
+        args.token,
+        args.owner,
+        args.repo,
+        dir.path,
+        args.defaultBranch
+      );
+
+      for (const entry of entries) {
+        if (paths.length >= MAX_DOTNET_PROJECT_FILES) break;
+        if (entry.type === "file" && isDotnetProjectFile(entry.name)) {
+          paths.push(entry.path);
+        } else if (entry.type === "dir") {
+          try {
+            const subEntries = await listRepositoryDirectory(
+              args.token,
+              args.owner,
+              args.repo,
+              entry.path,
+              args.defaultBranch
+            );
+            for (const sub of subEntries) {
+              if (paths.length >= MAX_DOTNET_PROJECT_FILES) break;
+              if (sub.type === "file" && isDotnetProjectFile(sub.name)) {
+                paths.push(sub.path);
+              }
+            }
+          } catch {
+            // Subdirectory listing is best-effort.
+          }
+        }
+      }
+    } catch {
+      // Directory listing is best-effort.
+    }
+  }
+
+  return paths;
+}
 
 function isDeploymentRelevantFile(path: string) {
   return (
@@ -234,6 +335,33 @@ export async function loadRepositoryFilesFromGitHub(args: {
       fileMap[entry.path] = "";
     });
 
+    // Collect .sln and .csproj files which can't be fetched by literal path
+    const dotnetPaths = await collectDotnetProjectFiles({
+      token: args.token,
+      owner: args.owner,
+      repo: args.repo,
+      rootEntries,
+      defaultBranch: args.defaultBranch
+    });
+
+    await Promise.all(
+      dotnetPaths.map(async (path) => {
+        if (fileMap[path]) return;
+        try {
+          const file = await getRepositoryFile(
+            args.token,
+            args.owner,
+            args.repo,
+            path,
+            args.defaultBranch
+          );
+          fileMap[file.path] = file.content;
+        } catch {
+          // Best-effort.
+        }
+      })
+    );
+
     const rootSourceFiles = await collectSourceFiles({
       token: args.token,
       owner: args.owner,
@@ -345,7 +473,7 @@ export async function loadRepositoryFilesFromGitHub(args: {
 
     await Promise.all(
       workflowEntries
-        .filter((entry) => entry.type === "file")
+        .filter((entry) => entry.type === "file" && (entry.path.endsWith(".yml") || entry.path.endsWith(".yaml")))
         .map(async (entry) => {
           const file = await getRepositoryFile(
             args.token,

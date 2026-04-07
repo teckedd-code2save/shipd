@@ -2,6 +2,7 @@
 node_modules
 .env
 .env.local
+.env.production.local
 .turbo
 coverage
 dist
@@ -10,3 +11,4 @@ src/generated/prisma
 .vscode
 *.log
 tsconfig.tsbuildinfo
+.vercel

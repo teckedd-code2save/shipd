@@ -19,19 +19,23 @@ interface OpenAIResponsesApiResponse {
   }>;
 }
 
+function stripMarkdownFences(text: string) {
+  return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+}
+
 function getOpenAIText(response: OpenAIResponsesApiResponse) {
-  if (response.output_text) {
-    return response.output_text.trim();
-  }
-
-  const text = response.output
-    ?.flatMap((item) => item.content ?? [])
-    .filter((part) => part.type === "output_text" || part.type === "text")
-    .map((part) => part.text ?? "")
-    .join("\n")
-    .trim();
-
-  return text || null;
+  const raw = (() => {
+    if (response.output_text) return response.output_text.trim();
+    return (
+      response.output
+        ?.flatMap((item) => item.content ?? [])
+        .filter((part) => part.type === "output_text" || part.type === "text")
+        .map((part) => part.text ?? "")
+        .join("\n")
+        .trim() || null
+    );
+  })();
+  return raw ? stripMarkdownFences(raw) : raw;
 }
 
 async function createOpenAIResponse(input: {

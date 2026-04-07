@@ -34,7 +34,10 @@ export const railwayRule: PlatformRule = {
     if (signals.javaProjectFiles.length > 0) score += 4;
     if (signals.envVars.some((value) => value.includes("DATABASE"))) score += 8;
     if (signals.envVars.some((value) => value.includes("REDIS"))) score += 8;
-    if (signals.framework === "nextjs" && !signals.hasDockerfile && !signals.hasCustomServer) score -= 10;
+    // Next.js with a database is a strong Railway use case — co-locate app + DB in one project
+    if (signals.framework === "nextjs" && signals.envVars.some((v) => v.includes("DATABASE"))) score += 26;
+    // Plain Next.js with no DB, no Docker, no custom server is better served by Vercel
+    else if (signals.framework === "nextjs" && !signals.hasDockerfile && !signals.hasCustomServer) score -= 6;
     return score;
   },
   reasons(context) {
@@ -84,7 +87,11 @@ export const railwayRule: PlatformRule = {
       reasons.push(`${signals.rubyProjectFiles[0]} identifies a Ruby project Railway can host as a web service.`);
     }
     if (signals.envVars.some((value) => value.includes("DATABASE"))) {
-      reasons.push(`${signals.envFilePaths[0] ?? ".env.example"} references database variables that map well to Railway services.`);
+      if (signals.framework === "nextjs") {
+        reasons.push("Next.js with a database is a strong Railway use case — you get the app and Postgres in one project with DATABASE_URL auto-wired.");
+      } else {
+        reasons.push(`${signals.envFilePaths[0] ?? ".env.example"} references database variables that map well to Railway's managed service model.`);
+      }
     }
     if (signals.infrastructureFiles.length > 0) {
       reasons.push(`${signals.infrastructureFiles[0]} indicates there is already infra-aware deployment context in the repo.`);

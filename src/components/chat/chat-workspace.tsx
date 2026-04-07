@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { DeploymentGuide } from "@/components/chat/deployment-guide";
+import { getPlatformSteps } from "@/lib/analysis/platform-steps";
 import { SendIcon, SparklesIcon } from "@/components/ui/icons";
 
-interface DeploymentStep {
-  title: string;
+type PlanFitType = "clean" | "multi_service" | "no_fit";
+
+interface EnvProvider {
+  name: string;
+  url: string;
+  note?: string;
+}
+
+interface EnvProviderSuggestion {
+  var: string;
+  label: string;
   description: string;
-  commands?: string[];
-  notes?: string;
-  category: "setup" | "config" | "deploy" | "verify";
+  providers: EnvProvider[];
 }
 
 interface DeploymentPlan {
@@ -21,7 +28,10 @@ interface DeploymentPlan {
   confidence: number;
   blockers: string[];
   warnings: string[];
-  steps: DeploymentStep[];
+  nextSteps: string[];
+  fitType?: PlanFitType;
+  altPaths?: string[];
+  envProviders?: EnvProviderSuggestion[];
 }
 
 interface ChatWorkspaceProps {
@@ -32,306 +42,462 @@ interface ChatWorkspaceProps {
   framework?: string;
   runtime?: string;
   primaryAppRoot?: string;
+  topology?: string;
 }
 
 interface ChatBubble {
   id: string;
   role: "assistant" | "user";
   text: string;
+  plan?: DeploymentPlan;
+  framework?: string;
   pending?: boolean;
 }
 
-type ActiveTab = "guide" | "chat";
+// ─── Clipboard ──────────────────────────────────────────────────────────────
 
-function formatRoot(value?: string) {
-  if (!value) return null;
-  return value === "." ? "the repo root" : value;
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+
+  return (
+    <button type="button" className="step-copy-btn" onClick={handleCopy} aria-label="Copy command">
+      {copied ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
 }
 
-function buildLead({
-  repoLabel,
-  initialPlan,
-  repoClass,
-  framework,
-  runtime,
-  primaryAppRoot
-}: ChatWorkspaceProps) {
-  const rootLabel = formatRoot(primaryAppRoot);
-  void repoClass;
+// ─── Markdown renderer ───────────────────────────────────────────────────────
 
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s)>\]"]+)/);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={i} className="chat-inline-code">{part.slice(1, -1)}</code>;
+    if (part.startsWith("http://") || part.startsWith("https://")) {
+      const url = part.replace(/[.,!?;:]+$/, "");
+      const trailing = part.slice(url.length);
+      return <>{<a key={i} href={url} target="_blank" rel="noreferrer" className="chat-inline-link">{url}</a>}{trailing}</>;
+    }
+    return part;
+  });
+}
+
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  const pending: { type: "ul" | "ol"; items: string[] } = { type: "ul", items: [] };
+  let key = 0;
+  let inCodeBlock = false;
+  const codeLines: string[] = [];
+  let codeLang = "";
+
+  function flushList() {
+    if (!pending.items.length) return;
+    const Tag = pending.type === "ul" ? "ul" : "ol";
+    elements.push(
+      <Tag key={key++} className={`chat-md-list${pending.type === "ol" ? " chat-md-ol" : ""}`}>
+        {pending.items.map((item, i) => <li key={i} className="chat-md-li">{renderInline(item)}</li>)}
+      </Tag>
+    );
+    pending.items = [];
+  }
+
+  function flushCodeBlock() {
+    if (!codeLines.length) return;
+    elements.push(
+      <div key={key++} className="chat-code-block">
+        {codeLang && <span className="chat-code-lang">{codeLang}</span>}
+        <pre><code>{codeLines.join("\n")}</code></pre>
+      </div>
+    );
+    codeLines.length = 0;
+    codeLang = "";
+  }
+
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      if (inCodeBlock) {
+        flushCodeBlock();
+        inCodeBlock = false;
+      } else {
+        flushList();
+        inCodeBlock = true;
+        codeLang = line.slice(3).trim();
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.+)/);
+    const numbered = line.match(/^\d+\.\s+(.+)/);
+    const heading = line.match(/^#{1,3}\s+(.+)/);
+    const blockquote = line.match(/^>\s*(.*)/);
+    const hr = line.match(/^---+$/);
+
+    if (bullet) {
+      if (pending.type === "ol" && pending.items.length) flushList();
+      pending.type = "ul";
+      pending.items.push(bullet[1]!);
+    } else if (numbered) {
+      if (pending.type === "ul" && pending.items.length) flushList();
+      pending.type = "ol";
+      pending.items.push(numbered[1]!);
+    } else {
+      flushList();
+      if (hr) {
+        elements.push(<hr key={key++} className="chat-md-hr" />);
+      } else if (heading) {
+        const level = (line.match(/^(#{1,3})/)?.[1].length ?? 2);
+        elements.push(
+          <div key={key++} className={`chat-md-heading chat-md-h${level}`}>{renderInline(heading[1]!)}</div>
+        );
+      } else if (blockquote) {
+        elements.push(
+          <blockquote key={key++} className="chat-md-blockquote">{renderInline(blockquote[1]!)}</blockquote>
+        );
+      } else if (line.trim()) {
+        elements.push(<p key={key++} className="chat-md-para">{renderInline(line)}</p>);
+      }
+    }
+  }
+  flushList();
+  if (inCodeBlock) flushCodeBlock();
+  return <>{elements}</>;
+}
+
+// ─── Expandable step ────────────────────────────────────────────────────────
+
+function ExpandableStep({
+  step,
+  index,
+  isOpen,
+  onToggle
+}: {
+  step: ReturnType<typeof getPlatformSteps>[number];
+  index: number;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className={`exp-step${isOpen ? " exp-step-open" : ""}`}>
+      <button type="button" className="exp-step-header" onClick={onToggle}>
+        <span className="exp-step-num">{index + 1}</span>
+        <span className="exp-step-title">{step.title}</span>
+        <svg className="exp-step-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div className="exp-step-body">
+          <p className="exp-step-detail">{step.detail}</p>
+          {step.command && (
+            <div className="exp-step-cmd-row">
+              <code className="exp-step-cmd">{step.command}</code>
+              <CopyButton text={step.command} />
+            </div>
+          )}
+          {step.actionUrl && (
+            <a href={step.actionUrl} target="_blank" rel="noreferrer" className="exp-step-link">
+              {step.actionLabel ?? "Open docs"}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── No-fit / multi-service card ────────────────────────────────────────────
+
+function NoFitCard({ plan }: { plan: DeploymentPlan }) {
+  const isMulti = plan.fitType === "multi_service";
+  return (
+    <div className="no-fit-card">
+      <div className="no-fit-badge">{isMulti ? "Multi-service repository" : "No clean platform fit"}</div>
+      <p className="no-fit-copy">{plan.summary}</p>
+      {plan.altPaths && plan.altPaths.length > 0 && (
+        <>
+          <div className="no-fit-section-label">Better deployment paths</div>
+          <div className="no-fit-paths">
+            {plan.altPaths.map((path, i) => (
+              <div key={i} className="no-fit-path">
+                <span className="no-fit-path-bullet" />
+                {path}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="no-fit-section-label">Closest available option: {plan.topPlatform} ({plan.score}/100)</div>
+    </div>
+  );
+}
+
+// ─── Plan card (initial structured message) ─────────────────────────────────
+
+function PlanCard({
+  plan,
+  lead,
+  framework
+}: {
+  plan: DeploymentPlan;
+  lead: string;
+  framework?: string;
+}) {
+  const isNoFit = plan.fitType === "no_fit" || plan.fitType === "multi_service";
+  const steps = useMemo(() => getPlatformSteps(plan.topPlatform, framework), [plan.topPlatform, framework]);
+  const [openStep, setOpenStep] = useState<number | null>(null);
+
+  function toggle(i: number) {
+    setOpenStep((prev) => (prev === i ? null : i));
+  }
+
+  return (
+    <div className="chat-plan-card">
+      {isNoFit ? (
+        <NoFitCard plan={plan} />
+      ) : (
+        <p className="chat-plan-lead">{lead}</p>
+      )}
+
+      {plan.blockers.length > 0 && (
+        <div className="chat-plan-section">
+          <div className="chat-plan-section-label">Fix before deploying</div>
+          <div className="chat-plan-issues">
+            {plan.blockers.map((b, i) => (
+              <div key={i} className="chat-plan-issue chat-plan-issue-danger">
+                <span className="chat-plan-issue-dot" />{b}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {plan.warnings.length > 0 && (
+        <div className="chat-plan-section">
+          <div className="chat-plan-section-label">Worth addressing</div>
+          <div className="chat-plan-issues">
+            {plan.warnings.map((w, i) => (
+              <div key={i} className="chat-plan-issue chat-plan-issue-warn">
+                <span className="chat-plan-issue-dot" />{w}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="chat-plan-section">
+        <div className="chat-plan-section-label">
+          {isNoFit ? "If deploying to " + plan.topPlatform : "Deployment steps"}
+          <span className="chat-plan-section-hint">click to expand</span>
+        </div>
+        <div className="exp-steps">
+          {steps.map((step, i) => (
+            <ExpandableStep
+              key={i}
+              step={step}
+              index={i}
+              isOpen={openStep === i}
+              onToggle={() => toggle(i)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {plan.envProviders && plan.envProviders.length > 0 && (
+        <div className="chat-plan-section">
+          <div className="chat-plan-section-label">Services you'll need to provision</div>
+          <div className="env-providers">
+            {plan.envProviders.map((ep, i) => (
+              <div key={i} className="env-provider-card">
+                <div className="env-provider-header">
+                  <code className="env-provider-var">{ep.var}</code>
+                  <span className="env-provider-label">{ep.label}</span>
+                </div>
+                <div className="env-provider-options">
+                  {ep.providers.map((p, j) => (
+                    <a key={j} href={p.url} target="_blank" rel="noreferrer" className="env-provider-option">
+                      <span className="env-provider-name">{p.name}</span>
+                      {p.note && <span className="env-provider-note">{p.note}</span>}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Lead text ───────────────────────────────────────────────────────────────
+
+function buildLead({ repoLabel, initialPlan, repoClass, framework, runtime, primaryAppRoot }: ChatWorkspaceProps) {
+  const rootSuffix = primaryAppRoot && primaryAppRoot !== "." ? ` (root: ${primaryAppRoot})` : "";
+
+  if (initialPlan.fitType === "no_fit" || initialPlan.score < 30) {
+    return `Shipd couldn't identify a deployment platform for ${repoLabel} from the files alone. Ask me anything — I've read the README and can walk you through getting this deployed step by step.`;
+  }
   if (repoClass === "insufficient_evidence" || repoClass === "notebook_repo" || repoClass === "library_or_package") {
-    return `Shipd has not found enough deployment evidence to give ${repoLabel} a strong go-live path yet. I can help narrow the runtime, entrypoint, and platform setup you need next.`;
+    return `Shipd couldn't find enough deployment signals in ${repoLabel} to make a strong call yet. Work through the steps below to surface a cleaner path.`;
   }
-
   if (framework === "csharp" || runtime === "dotnet") {
-    return `${repoLabel} looks like a .NET service${rootLabel ? ` rooted at ${rootLabel}` : ""}. The fastest path now is to validate the recommended platform, confirm the entrypoint, and generate a clean go-live checklist.`;
+    return `${repoLabel}${rootSuffix} is a .NET service — ${initialPlan.topPlatform} is the strongest available fit. Expand each step for the exact commands.`;
   }
-
-  if (framework === "go") {
-    return `${repoLabel} looks like a Go service${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you confirm the best platform, review env requirements, and produce a minimal launch checklist.`;
-  }
-
-  if (framework === "ruby") {
-    return `${repoLabel} looks like a Ruby service${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you pick the right host, verify the Rack entrypoint, and get this live quickly.`;
-  }
-
-  if (framework === "java") {
-    return `${repoLabel} looks like a Java service${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you choose the best platform, confirm the build toolchain, and create a launch checklist.`;
-  }
-
-  if (framework === "rust") {
-    return `${repoLabel} looks like a Rust service${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you validate platform fit, Docker build settings, and produce a concise go-live plan.`;
-  }
-
-  if (framework === "php") {
-    return `${repoLabel} looks like a PHP service${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you choose the right host, confirm framework requirements, and generate a launch checklist.`;
-  }
-
-  if (framework === "sveltekit") {
-    return `${repoLabel} looks like a SvelteKit app${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you pick the right adapter and platform, and explain the deploy path step by step.`;
-  }
-
-  if (framework === "nuxt") {
-    return `${repoLabel} looks like a Nuxt app${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you choose a Nitro preset, pick a platform, and walk through the deployment.`;
-  }
-
-  if (framework === "remix") {
-    return `${repoLabel} looks like a Remix app${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you pick the right adapter, confirm the runtime target, and step through the deployment.`;
-  }
-
-  if (framework === "astro") {
-    return `${repoLabel} looks like an Astro site${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you pick the right output adapter, choose a platform, and walk through deployment.`;
-  }
-
   if (framework === "nextjs") {
-    return `${repoLabel} looks like a Next.js app${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you pick the cleanest deploy path, explain tradeoffs, and get this live quickly.`;
+    return `${repoLabel}${rootSuffix} is a Next.js app — ${initialPlan.topPlatform} is the recommended platform. Expand each step to get live.`;
   }
-
   if (framework === "python" || repoClass === "python_service") {
-    return `${repoLabel} looks like a Python service${rootLabel ? ` rooted at ${rootLabel}` : ""}. I can help you choose the right host, confirm the runtime path, and produce a minimal launch checklist.`;
+    return `${repoLabel}${rootSuffix} is a Python service — ${initialPlan.topPlatform} is the best current fit. Expand each step for commands.`;
   }
-
-  return `${initialPlan.summary} I can now focus on the quickest go-live path, platform tradeoffs, and setup steps for ${repoLabel}.`;
+  return `${repoLabel}${rootSuffix} — ${initialPlan.topPlatform} scores ${initialPlan.score}/100. Expand each step below to deploy.`;
 }
 
-function buildQuickPrompts({
-  framework,
-  runtime,
-  initialPlan
-}: Pick<ChatWorkspaceProps, "framework" | "runtime" | "initialPlan">) {
+function buildQuickPrompts({ framework, runtime, initialPlan }: Pick<ChatWorkspaceProps, "framework" | "runtime" | "initialPlan">) {
   if (framework === "csharp" || runtime === "dotnet") {
-    return [
-      `How do I get this live quickly on ${initialPlan.topPlatform}?`,
-      "What .NET runtime settings do I need?",
-      "Give me the shortest launch checklist"
-    ];
+    return [`How do I deploy this to ${initialPlan.topPlatform}?`, "Do I need a Dockerfile?", "Why not a different platform?"];
   }
-
-  if (framework === "go") {
-    return [
-      `How do I deploy this Go service on ${initialPlan.topPlatform}?`,
-      "What environment variables do I need to set?",
-      "Give me a step-by-step launch checklist"
-    ];
-  }
-
-  if (framework === "ruby") {
-    return [
-      `How do I deploy this Ruby app on ${initialPlan.topPlatform}?`,
-      "What does the Procfile or start command need to look like?",
-      "What database setup do I need?"
-    ];
-  }
-
-  if (framework === "java") {
-    return [
-      `How do I deploy this Java app on ${initialPlan.topPlatform}?`,
-      "Do I need a Dockerfile or will a buildpack work?",
-      "Give me a minimal launch checklist"
-    ];
-  }
-
-  if (framework === "rust") {
-    return [
-      `How do I deploy this Rust service on ${initialPlan.topPlatform}?`,
-      "What does the Dockerfile need for a Rust binary?",
-      "What are the memory and startup tradeoffs?"
-    ];
-  }
-
-  if (framework === "php") {
-    return [
-      `How do I deploy this PHP app on ${initialPlan.topPlatform}?`,
-      "What web server config do I need?",
-      "Give me a minimal launch checklist"
-    ];
-  }
-
-  if (framework === "sveltekit") {
-    return [
-      `Which SvelteKit adapter should I use for ${initialPlan.topPlatform}?`,
-      "How do I configure environment variables in SvelteKit?",
-      "Give me a step-by-step deploy guide"
-    ];
-  }
-
-  if (framework === "nuxt") {
-    return [
-      `Which Nuxt preset works best for ${initialPlan.topPlatform}?`,
-      "Do I need SSR or can I use static output?",
-      "Give me a minimal deploy checklist"
-    ];
-  }
-
-  if (framework === "remix") {
-    return [
-      `Which Remix adapter do I need for ${initialPlan.topPlatform}?`,
-      "How do I handle sessions and cookies on ${initialPlan.topPlatform}?",
-      "Give me a step-by-step deploy guide"
-    ];
-  }
-
-  if (framework === "astro") {
-    return [
-      `Which Astro adapter should I use for ${initialPlan.topPlatform}?`,
-      "Can I use static output or do I need SSR?",
-      "Give me a minimal deploy checklist"
-    ];
-  }
-
   if (framework === "nextjs") {
-    return [
-      "Where should I deploy this Next.js app?",
-      `How do I go live quickly on ${initialPlan.topPlatform}?`,
-      "What blocks production launch?"
-    ];
+    return [`Walk me through deploying to ${initialPlan.topPlatform}`, "What env vars do I need?", "Why not Railway instead?"];
   }
-
   if (framework === "python" || runtime === "python") {
-    return [
-      `How do I deploy this Python app on ${initialPlan.topPlatform}?`,
-      "What entrypoint is Shipd using?",
-      "Give me a minimal production checklist"
-    ];
+    return [`How do I get this live on ${initialPlan.topPlatform}?`, "What start command should I use?", "Do I need a Procfile?"];
   }
-
-  return [
-    "Where should I deploy?",
-    `How do I go live quickly on ${initialPlan.topPlatform}?`,
-    "Summarize blockers before launch"
-  ];
+  if (initialPlan.fitType === "no_fit" || initialPlan.score < 30) {
+    return ["How do I deploy this?", "What platform fits this project?", "Walk me through it step by step"];
+  }
+  return [`Walk me through ${initialPlan.topPlatform} deployment`, "What's blocking production launch?", "Compare all platform options"];
 }
+
+// ─── Assistant message ───────────────────────────────────────────────────────
+
+function AssistantMessage({ bubble, lead }: { bubble: ChatBubble; lead: string }) {
+  return (
+    <div className="chat-message chat-message-assistant">
+      <div className="chat-message-avatar"><SparklesIcon size={14} /></div>
+      <div>
+        <div className="chat-message-body">
+          {bubble.plan ? (
+            <PlanCard plan={bubble.plan} lead={lead} framework={bubble.framework} />
+          ) : bubble.pending ? (
+            <>Looking at your repo...<span className="chat-thinking-indicator" aria-label="responding"><span /><span /><span /></span></>
+          ) : (
+            renderMarkdown(bubble.text)
+          )}
+        </div>
+        <span className="chat-ai-disclaimer">
+          {bubble.pending ? "Shipd is responding..." : "AI-generated · may be inaccurate"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
   const { repoId, repoLabel, initialPlan, framework, runtime, repoClass, primaryAppRoot } = props;
-  const [activeTab, setActiveTab] = useState<ActiveTab>("guide");
-  const [currentSteps, setCurrentSteps] = useState<DeploymentStep[]>(initialPlan.steps ?? []);
 
-  const initialAssistantText = useMemo(
-    () =>
-      buildLead({
-        repoId,
-        repoLabel,
-        initialPlan,
-        framework,
-        runtime,
-        repoClass,
-        primaryAppRoot
-      }),
+  const lead = useMemo(
+    () => buildLead({ repoId, repoLabel, initialPlan, framework, runtime, repoClass, primaryAppRoot }),
     [framework, initialPlan, primaryAppRoot, repoClass, repoId, repoLabel, runtime]
   );
   const quickPrompts = useMemo(
     () => buildQuickPrompts({ framework, runtime, initialPlan }),
     [framework, runtime, initialPlan]
   );
-  const [messages, setMessages] = useState<ChatBubble[]>([
-    {
-      id: "initial-assistant",
-      role: "assistant",
-      text: initialAssistantText
-    }
-  ]);
+
+  const initialBubble: ChatBubble = useMemo(
+    () => ({ id: "initial-assistant", role: "assistant", text: lead, plan: initialPlan, framework }),
+    [lead, initialPlan, framework]
+  );
+
+  const [messages, setMessages] = useState<ChatBubble[]>([initialBubble]);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const historyLoaded = useRef(false);
 
+  // Load persisted chat history once per repoId
   useEffect(() => {
-    setMessages([
-      {
-        id: "initial-assistant",
-        role: "assistant",
-        text: initialAssistantText
-      }
-    ]);
-    setCurrentSteps(initialPlan.steps ?? []);
+    historyLoaded.current = false;
+    setMessages([initialBubble]);
     setInput("");
     setIsSubmitting(false);
-  }, [repoId, initialAssistantText, initialPlan.steps]);
+
+    void fetch(`/api/chat/history?repoId=${repoId}`)
+      .then((r) => r.json())
+      .then((data: { messages?: Array<{ id: string; role: string; content: string }> }) => {
+        const history = data.messages ?? [];
+        if (history.length === 0) return;
+        const bubbles: ChatBubble[] = history.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          text: m.content
+        }));
+        setMessages([initialBubble, ...bubbles]);
+        historyLoaded.current = true;
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoId]);
 
   async function sendMessage(nextInput?: string) {
     const value = (nextInput ?? input).trim();
+    if (!value || isSubmitting) return;
 
-    if (!value || isSubmitting) {
-      return;
-    }
-
-    const userMessage: ChatBubble = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text: value
-    };
-
-    setMessages((current) => [...current, userMessage]);
-    setActiveTab("chat");
+    const userMessage: ChatBubble = { id: `user-${Date.now()}`, role: "user", text: value };
+    setMessages((prev) => [...prev, userMessage]);
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const res = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          repoId,
-          message: userMessage.text
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoId, message: userMessage.text })
       });
-
-      if (!response.ok) {
-        throw new Error("Chat request failed.");
-      }
-
-      const payload = (await response.json()) as {
-        message?: string;
-        plan?: DeploymentPlan;
-        object?: DeploymentPlan;
-      };
-
-      // If the AI returned new steps, surface them in the guide
-      const newSteps = payload.object?.steps ?? payload.plan?.steps;
-      if (newSteps && newSteps.length > 0) {
-        setCurrentSteps(newSteps);
-      }
-
-      setMessages((current) => [
-        ...current,
+      if (!res.ok) throw new Error("Chat request failed.");
+      const payload = (await res.json()) as { message?: string; plan?: DeploymentPlan };
+      setMessages((prev) => [
+        ...prev,
         {
           id: `assistant-${Date.now()}`,
           role: "assistant",
-          text:
-            payload.message ??
-            payload.plan?.summary ??
-            "Shipd could not generate a response for that request."
+          text: payload.message ?? payload.plan?.summary ?? "Shipd could not generate a response for that request."
         }
       ]);
       setInput("");
     } catch {
-      setMessages((current) => [
-        ...current,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          text: "Shipd could not complete that request right now. Try again."
-        }
+      setMessages((prev) => [
+        ...prev,
+        { id: `assistant-error-${Date.now()}`, role: "assistant", text: "Shipd could not complete that request. Try again." }
       ]);
     } finally {
       setIsSubmitting(false);
@@ -343,141 +509,68 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       <div className="chat-workspace-header">
         <div>
           <div className="chat-workspace-title">{initialPlan.title}</div>
-          <div className="chat-workspace-copy">Work through tradeoffs, blockers, and next steps from one planning thread.</div>
+          <div className="chat-workspace-copy">Ask anything about deploying this repo — tradeoffs, blockers, or platform differences.</div>
         </div>
         <div className="chat-workspace-chips">
-          <span className="repo-chip repo-chip-accent">{initialPlan.topPlatform}</span>
-          <span className="repo-chip">{initialPlan.score}/100</span>
-          <span className="repo-chip">{Math.round(initialPlan.confidence * 100)}% confidence</span>
+          {initialPlan.fitType !== "no_fit" && initialPlan.score >= 30 ? (
+            <>
+              <span className="repo-chip repo-chip-accent">{initialPlan.topPlatform}</span>
+              <span className="repo-chip">{initialPlan.score}/100 fit</span>
+            </>
+          ) : (
+            <span className="repo-chip">No clear fit detected</span>
+          )}
         </div>
       </div>
 
-      {/* Tab switcher */}
-      <div className="chat-tabs">
-        <button
-          type="button"
-          className={`chat-tab${activeTab === "guide" ? " chat-tab-active" : ""}`}
-          onClick={() => setActiveTab("guide")}
-        >
-          Deployment Guide
-          {currentSteps.length > 0 ? (
-            <span className="chat-tab-count">{currentSteps.length}</span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          className={`chat-tab${activeTab === "chat" ? " chat-tab-active" : ""}`}
-          onClick={() => setActiveTab("chat")}
-        >
-          Chat
-          {messages.length > 1 ? (
-            <span className="chat-tab-count">{messages.length - 1}</span>
-          ) : null}
-        </button>
+      <div className="chat-thread">
+        {messages.map((msg) =>
+          msg.role === "assistant" ? (
+            <AssistantMessage key={msg.id} bubble={msg} lead={lead} />
+          ) : (
+            <div key={msg.id} className="chat-message chat-message-user">
+              <div><div className="chat-message-user-bubble">{msg.text}</div></div>
+            </div>
+          )
+        )}
+        {isSubmitting && (
+          <div className="chat-message chat-message-assistant">
+            <div className="chat-message-avatar"><SparklesIcon size={14} /></div>
+            <div>
+              <div className="chat-message-body">
+                Looking at your repo...
+                <span className="chat-thinking-indicator" aria-label="responding"><span /><span /><span /></span>
+              </div>
+              <span className="chat-ai-disclaimer">Shipd is responding...</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Guide panel */}
-      {activeTab === "guide" ? (
-        <div className="chat-guide-panel">
-          <DeploymentGuide steps={currentSteps} platform={initialPlan.topPlatform} />
-        </div>
-      ) : null}
-
-      {/* Chat panel */}
-      {activeTab === "chat" ? (
-        <>
-          <div className="chat-thread">
-            {messages.map((message) => (
-              <div key={message.id} className={message.role === "assistant" ? "chat-message chat-message-assistant" : "chat-message chat-message-user"}>
-                {message.role === "assistant" ? (
-                  <div className="chat-message-avatar">
-                    <SparklesIcon size={14} />
-                  </div>
-                ) : null}
-                <div>
-                  <div className={message.role === "assistant" ? "chat-message-body" : "chat-message-user-bubble"}>
-                    {message.text}
-                    {message.pending ? (
-                      <span className="chat-thinking-indicator" aria-label="Shipd is responding">
-                        <span />
-                        <span />
-                        <span />
-                      </span>
-                    ) : null}
-                  </div>
-                  {message.role === "assistant" ? (
-                    <span className="chat-ai-disclaimer">
-                      {message.pending ? "Shipd is responding..." : "AI-generated · may be inaccurate"}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-            {isSubmitting ? (
-              <div className="chat-message chat-message-assistant">
-                <div className="chat-message-avatar">
-                  <SparklesIcon size={14} />
-                </div>
-                <div>
-                  <div className="chat-message-body">
-                    Thinking through your repo context.
-                    <span className="chat-thinking-indicator" aria-label="Shipd is responding">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                  </div>
-                  <span className="chat-ai-disclaimer">Shipd is responding...</span>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="chat-prompt-row">
-            {quickPrompts.map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                className="chat-quick-prompt"
-                disabled={isSubmitting}
-                onClick={() => {
-                  setInput(prompt);
-                  void sendMessage(prompt);
-                }}
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
+      <div className="chat-prompt-row">
+        {quickPrompts.map((prompt) => (
+          <button key={prompt} type="button" className="chat-quick-prompt" disabled={isSubmitting}
+            onClick={() => { setInput(prompt); void sendMessage(prompt); }}>
+            {prompt}
+          </button>
+        ))}
+      </div>
 
       <div className="chat-input-shell">
         <div className="chat-input-wrap">
           <input
             value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void sendMessage();
-              }
-            }}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }}
             placeholder="Ask about deployment, blockers, or platform fit..."
             className="chat-input"
           />
-          <button
-            type="button"
-            onClick={() => void sendMessage()}
-            disabled={isSubmitting}
-            className="chat-send-button"
-            aria-label="Send message"
-          >
+          <button type="button" onClick={() => void sendMessage()} disabled={isSubmitting} className="chat-send-button" aria-label="Send">
             <SendIcon size={16} />
           </button>
         </div>
         <div className="chat-input-hint">
-          Try: &quot;Give me a step-by-step deploy guide&quot;, &quot;Why not Railway?&quot;, or &quot;Summarize blockers before launch&quot;.
+          Try: &quot;Do I need a Dockerfile?&quot;, &quot;Why not Vercel?&quot;, or &quot;Write me a railway.toml&quot;.
         </div>
       </div>
     </section>
