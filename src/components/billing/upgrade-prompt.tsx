@@ -34,7 +34,7 @@ export function UpgradePrompt({ kind }: UpgradePromptProps) {
           fontSize: 11,
           letterSpacing: 2,
           textTransform: "uppercase",
-          color: "#e8ff47",
+          color: "var(--accent-blue)",
           marginBottom: 16,
           fontFamily: "var(--font-mono)",
         }}
@@ -62,34 +62,10 @@ export function UpgradePrompt({ kind }: UpgradePromptProps) {
         {body}
       </p>
       <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-        <Link
-          href="/pricing"
-          style={{
-            display: "inline-block",
-            padding: "11px 24px",
-            background: "#e8ff47",
-            color: "#000",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: 1,
-            textDecoration: "none",
-          }}
-        >
+        <Link href="/pricing" className="action-link action-link-primary" style={{ borderRadius: 12, fontSize: 13 }}>
           View pricing →
         </Link>
-        <Link
-          href="/dashboard"
-          style={{
-            display: "inline-block",
-            padding: "11px 24px",
-            border: "1px solid var(--border)",
-            color: "var(--text-secondary)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            textDecoration: "none",
-          }}
-        >
+        <Link href="/dashboard" className="action-link" style={{ borderRadius: 12, fontSize: 13 }}>
           Back to dashboard
         </Link>
       </div>

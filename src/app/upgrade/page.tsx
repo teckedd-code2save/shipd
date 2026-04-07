@@ -76,8 +76,8 @@ export default async function UpgradePage({
             fontSize: 10,
             letterSpacing: 2,
             textTransform: "uppercase",
-            color: "#e8ff47",
-            border: "1px solid rgba(232,255,71,0.3)",
+            color: "var(--accent-blue)",
+            border: "1px solid rgba(91,108,242,0.3)",
             padding: "4px 12px",
             marginBottom: 28,
             fontFamily: "var(--font-mono)",
@@ -131,7 +131,7 @@ export default async function UpgradePage({
                 fontFamily: "var(--font-mono)",
               }}
             >
-              <span style={{ color: "#e8ff47" }}>✓</span>
+              <span style={{ color: "var(--accent-blue)" }}>✓</span>
               {f}
             </li>
           ))}
@@ -140,29 +140,14 @@ export default async function UpgradePage({
         {/* CTA */}
         <a
           href={`mailto:hello@shipd.io?subject=${mailtoSubject}&body=${mailtoBody}`}
-          style={{
-            display: "block",
-            padding: "13px",
-            background: "#e8ff47",
-            color: "#000",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            fontWeight: 600,
-            letterSpacing: 1,
-            textDecoration: "none",
-            marginBottom: 16,
-          }}
+          className="action-link action-link-primary"
+          style={{ display: "flex", borderRadius: 12, fontSize: 13, marginBottom: 16 }}
         >
           Express interest via email →
         </a>
         <Link
           href="/pricing"
-          style={{
-            fontSize: 12,
-            color: "var(--text-secondary)",
-            textDecoration: "none",
-            fontFamily: "var(--font-mono)",
-          }}
+          style={{ fontSize: 13, color: "var(--text-secondary)", textDecoration: "none" }}
         >
           ← Back to pricing
         </Link>

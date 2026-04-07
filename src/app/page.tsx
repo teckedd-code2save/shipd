@@ -91,7 +91,7 @@ export default async function LandingPage() {
           Point it at your repo. Get a deployment plan.
         </h1>
         <p className="muted" style={{ fontSize: 16, lineHeight: 1.6, marginBottom: 24 }}>
-          Reads your config files. No code changes. No installs.
+          Reads your repo, configs, and CI setup. No installs. No code changes.
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
           {session?.user ? (
@@ -100,15 +100,13 @@ export default async function LandingPage() {
             <AuthButton redirectTo="/dashboard" />
           )}
         </div>
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 36 }}>
           <a
             href="/pricing"
             style={{
-              fontSize: 13,
-              color: "var(--text-muted)",
+              fontSize: 14,
+              color: "var(--text-secondary)",
               textDecoration: "none",
-              borderBottom: "1px solid rgba(255,255,255,0.1)",
-              paddingBottom: 1,
             }}
           >
             See pricing →
