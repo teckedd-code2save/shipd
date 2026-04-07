@@ -333,7 +333,7 @@ function PlanCard({
 
       {plan.envProviders && plan.envProviders.length > 0 && (
         <div className="chat-plan-section">
-          <div className="chat-plan-section-label">Services you'll need to provision</div>
+          <div className="chat-plan-section-label">Services you&apos;ll need to provision</div>
           <div className="env-providers">
             {plan.envProviders.map((ep, i) => (
               <div key={i} className="env-provider-card">
