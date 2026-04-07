@@ -20,12 +20,12 @@ export default async function DashboardPage() {
           <section style={{ minWidth: 0 }}>
             <section className="dashboard-hero">
               <div>
-                <div className="dashboard-hero-kicker">Deployment planning workspace</div>
+                <div className="dashboard-hero-kicker">Deployment planning</div>
                 <h1 className="dashboard-hero-h1" style={{ marginBottom: 10, marginTop: 0, letterSpacing: "-0.04em" }}>
-                  Point it at your repos. Open the right deployment plan fast.
+                  Pick a repo. Get a deploy plan.
                 </h1>
-                <p className="muted" style={{ marginBottom: 0, maxWidth: 760, lineHeight: 1.72 }}>
-                  Use the dashboard to triage your repo inventory, open a planning workspace, and keep comparison and scan actions in one place instead of scattering them across every card.
+                <p className="muted" style={{ marginBottom: 0, maxWidth: 520, lineHeight: 1.65 }}>
+                  Scan any GitHub repo to get platform recommendations, tradeoff analysis, and a step-by-step deployment plan.
                 </p>
               </div>
             </section>

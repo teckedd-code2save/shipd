@@ -47,7 +47,7 @@ export default async function ComparisonPage({
 
         <section style={{ marginBottom: 28 }}>
           <div className="dashboard-hero-kicker">Platform comparison</div>
-          <h1 style={{ fontSize: 30, marginTop: 4, marginBottom: 12, letterSpacing: "-0.04em" }}>
+          <h1 style={{ fontSize: "clamp(22px, 4vw, 30px)", marginTop: 4, marginBottom: 12, letterSpacing: "-0.04em" }}>
             Where does this repo fit?
           </h1>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
