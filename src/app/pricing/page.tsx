@@ -282,7 +282,7 @@ export default function PricingPage() {
 
                 {/* CTA */}
                 <Link
-                  href={tier.cta.href}
+                  href={tier.cta.href as never}
                   className={`action-link${tier.featured ? " action-link-primary" : ""}`}
                   style={{
                     display: "flex",
