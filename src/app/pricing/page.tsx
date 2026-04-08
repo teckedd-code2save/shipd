@@ -5,7 +5,7 @@ import { PLAN_LIMITS, PLAN_PRICES } from "@/config/plans";
 
 export const metadata = {
   title: "Pricing — Shipd",
-  description: "Simple, honest pricing for deployment planning. Start free.",
+  description: "Straightforward pricing for repo-aware deployment planning.",
 };
 
 const TIERS = [
@@ -14,7 +14,7 @@ const TIERS = [
     name: "Free",
     price: PLAN_PRICES.FREE.display,
     period: "forever",
-    desc: "For solo devs exploring Shipd.",
+    desc: "For trying Shipd on public repos before you need deeper coverage.",
     features: [
       { label: `${PLAN_LIMITS.FREE.publicScansPerMonth} deployment plans / month`, on: true },
       { label: "Public repos", on: true },
@@ -31,7 +31,7 @@ const TIERS = [
     name: "Pro",
     price: PLAN_PRICES.PRO.display,
     period: "per month",
-    desc: "For developers who ship regularly.",
+    desc: "For developers who want unlimited plans, private repos, and better deployment context.",
     features: [
       { label: "Unlimited deployment plans", on: true },
       { label: "Public & private repos", on: true },
@@ -48,7 +48,7 @@ const TIERS = [
     name: "Team",
     price: PLAN_PRICES.TEAM.display,
     period: "per month",
-    desc: "For teams who can't afford a broken deploy.",
+    desc: "For teams that need shared plans, auditability, and fewer deployment surprises.",
     features: [
       { label: "Everything in Pro", on: true },
       { label: "Up to 10 seats", on: true },
@@ -59,29 +59,6 @@ const TIERS = [
     ],
     cta: { label: `Start Team — ${PLAN_PRICES.TEAM.display}/mo`, href: "/upgrade?plan=team" },
     featured: false,
-  },
-];
-
-const FAQS = [
-  {
-    q: "Do I need to install anything?",
-    a: "Nope. Shipd reads your existing config files directly. No CLI installs, no code changes, no new dependencies.",
-  },
-  {
-    q: "What repos does Shipd support?",
-    a: `Any GitHub repo. Free tier covers public repos (${PLAN_LIMITS.FREE.publicScansPerMonth} scans/month). Pro and Team unlock unlimited private repos.`,
-  },
-  {
-    q: "Can I cancel anytime?",
-    a: "Yes — cancel anytime, no questions asked. You keep access until the end of your billing period.",
-  },
-  {
-    q: "Is there a free trial for Pro?",
-    a: "The Free plan is your trial. Use it until you're ready to unlock unlimited plans and private repos.",
-  },
-  {
-    q: 'What counts as a "deployment plan"?',
-    a: `Each time Shipd analyzes a repo and generates a deployment plan, that counts as one. Free users get ${PLAN_LIMITS.FREE.publicScansPerMonth} per month; Pro and Team get unlimited.`,
   },
 ];
 
@@ -115,22 +92,22 @@ export default function PricingPage() {
               fontSize: "clamp(32px, 5vw, 56px)",
               fontWeight: 700,
               letterSpacing: "-0.05em",
-              lineHeight: 1.1,
+              lineHeight: 1.08,
               marginBottom: 16,
             }}
           >
-            Simple, honest pricing.
+            Pricing that matches how deeply you need to plan.
           </h1>
           <p
             style={{
               color: "var(--text-secondary)",
               fontSize: 15,
               lineHeight: 1.7,
-              maxWidth: 400,
+              maxWidth: 560,
               margin: "0 auto",
             }}
           >
-            No installs. No config changes. Connect your repo and go.
+            Start free on public repos. Upgrade when you need private repo support, unlimited plans, shared context, and more operational confidence.
           </p>
           <p
             style={{
@@ -289,12 +266,13 @@ export default function PricingPage() {
                     justifyContent: "center",
                     borderRadius: 12,
                     fontSize: 13,
-                    fontFamily: "var(--font-mono)",
+                    fontFamily: "inherit",
                     ...(tier.featured
                       ? {}
                       : {
                           border: "1px solid rgba(255,255,255,0.08)",
-                          color: "var(--text-secondary)",
+                          color: "var(--text-primary)",
+                          background: "rgba(255,255,255,0.035)",
                         }),
                   }}
                 >
@@ -302,62 +280,6 @@ export default function PricingPage() {
                 </Link>
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* FAQ */}
-        <div style={{ maxWidth: 600, margin: "0 auto 80px" }}>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-              textAlign: "center",
-              marginBottom: 28,
-            }}
-          >
-            {"// common questions"}
-          </p>
-
-          <style>{`
-            .faq-item summary {
-              list-style: none;
-              cursor: pointer;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              gap: 16px;
-              padding: 18px 0;
-              font-size: 13px;
-              color: var(--text-primary);
-              border-top: 1px solid rgba(255,255,255,0.06);
-            }
-            .faq-item summary::-webkit-details-marker { display: none; }
-            .faq-item summary::after {
-              content: '+';
-              color: var(--accent-blue);
-              font-size: 18px;
-              line-height: 1;
-              flex-shrink: 0;
-              font-family: var(--font-mono);
-            }
-            .faq-item[open] summary::after { content: '−'; }
-            .faq-item .faq-body {
-              font-size: 12px;
-              color: var(--text-secondary);
-              line-height: 1.7;
-              padding-bottom: 16px;
-            }
-            .faq-last { border-bottom: 1px solid rgba(255,255,255,0.06); }
-          `}</style>
-
-          {FAQS.map((f, i) => (
-            <details key={f.q} className={`faq-item${i === FAQS.length - 1 ? " faq-last" : ""}`}>
-              <summary>{f.q}</summary>
-              <p className="faq-body">{f.a}</p>
-            </details>
           ))}
         </div>
 

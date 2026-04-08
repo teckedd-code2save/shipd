@@ -1,230 +1,95 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { auth } from "@/auth";
 import { AuthButton } from "@/components/auth/auth-button";
-import { HowItWorks } from "@/components/landing/how-it-works";
-import { CtaLink } from "@/components/ui/cta-link";
-import { getPrismaClient } from "@/lib/db/prisma";
+import { BottomScrollAction } from "@/components/landing/bottom-scroll-action";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-const AVATAR_COLORS = [
-  "landing-avatar-blue",
-  "landing-avatar-purple",
-  "landing-avatar-green",
-  "landing-avatar-amber",
-  "landing-avatar-coral",
-];
-
-function initials(name: string | null, email: string | null): string {
-  if (name) {
-    const parts = name.trim().split(/\s+/);
-    return parts.length >= 2
-      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-      : parts[0].slice(0, 2).toUpperCase();
+const JOURNEY_SHOTS = [
+  {
+    title: "Choose your repo",
+    src: "/choose-repo.png",
+    alt: "Shipd repository selection view",
+    width: 1920,
+    height: 1440
+  },
+  {
+    title: "Scan",
+    src: "/sit-tight-shipdscanning.png",
+    alt: "Shipd scan in progress view",
+    width: 1920,
+    height: 1080
+  },
+  {
+    title: "See results",
+    src: "/see-results.png",
+    alt: "Shipd ranked deployment recommendations",
+    width: 1920,
+    height: 1440
   }
-  if (email) return email.slice(0, 2).toUpperCase();
-  return "??";
-}
-
-async function getLandingStats() {
-  try {
-    const db = getPrismaClient();
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-    const activeRepos = await db.repository.findMany({
-      where: { scans: { some: { createdAt: { gte: weekAgo } } } },
-      select: {
-        userId: true,
-        user: { select: { name: true, email: true } },
-        scans: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 1 },
-      },
-      distinct: ["userId"],
-    });
-
-    const activeCount = activeRepos.length;
-
-    const recentUsers = activeRepos
-      .sort((a, b) => {
-        const aTime = a.scans[0]?.createdAt?.getTime() ?? 0;
-        const bTime = b.scans[0]?.createdAt?.getTime() ?? 0;
-        return bTime - aTime;
-      })
-      .slice(0, 5)
-      .map((r) => initials(r.user.name, r.user.email));
-
-    return { activeCount, recentUsers };
-  } catch {
-    return { activeCount: 0, recentUsers: [] };
-  }
-}
-
+] as const;
 
 export default async function LandingPage() {
-  const [session, { activeCount, recentUsers }] = await Promise.all([
-    auth(),
-    getLandingStats(),
-  ]);
+  const session = await auth();
+  const isLoggedIn = Boolean(session?.user);
 
   return (
     <>
-      {/* ── Full-page ghost wordmark ────────────────────────────────────── */}
-      <div
-        aria-hidden="true"
-        className="landing-ghost"
-      >
-        Shipd
-      </div>
+      <div aria-hidden="true" className="landing-ghost">Shipd</div>
 
-      <main
-        className="page"
-        style={{ display: "flex", flexDirection: "column", minHeight: "100vh", position: "relative", zIndex: 1 }}
-      >
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
-     {/* ── Hero ─────────────────────────────────────────────────────────── */}
-<section
-  className="landing-hero"
-  style={{
-    maxWidth: 680,
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    margin: "0 auto",
-    textAlign: "center",
-    paddingTop: "clamp(40px, 8vw, 72px)",
-    paddingBottom: 24,
-  }}
->
-  {/* Mini UI preview — shows the value before clicking */}
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      marginBottom: 28,
-      padding: "12px 20px",
-      background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(255,255,255,0.08)",
-      borderRadius: 100,
-      fontFamily: "var(--font-mono)",
-      fontSize: 13,
-      color: "var(--text-muted)",
-    }}
-  >
-    <span style={{ 
-      width: 8, 
-      height: 8, 
-      borderRadius: "50%", 
-      background: "#22c55e",
-      boxShadow: "0 0 8px #22c55e",
-    }} />
-    teckedd-code2save/agent-exchange
-    <span style={{ color: "var(--text-secondary)" }}>→</span>
-    <span style={{ color: "#5b6cf2" }}>96/100 Vercel fit</span>
-  </div>
+      <main className="page relative z-10 flex min-h-screen flex-col">
+        <section className="landing-homepage relative z-10 space-y-10 md:space-y-14">
+          <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-5 text-center">
+            <Badge variant="secondary" className="px-3 font-mono tracking-[0.14em] uppercase">
+              Repo-aware deployment planning
+            </Badge>
 
-  <h1
-    style={{
-      fontSize: "clamp(26px, 4vw, 40px)",
-      fontWeight: 600,
-      lineHeight: 1.35,
-      letterSpacing: "-0.02em",
-      marginBottom: 16,
-      color: "var(--text-primary)",
-    }}
-  >
-    Your deployment genie,<br />
-    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>understands, guides,</span>
-  </h1>
+            <h1 className="landing-homepage-title text-balance">
+              Choose your repo, scan it, and see where it should ship.
+            </h1>
 
-  <p
-    style={{
-      fontSize: 16,
-      lineHeight: 1.6,
-      color: "var(--text-secondary)",
-      maxWidth: 420,
-      margin: "0 auto 32px",
-    }}
-  >
-    helping you ship unstressed.
-  </p>
+            <p className="max-w-2xl text-balance text-[15px] leading-7 text-muted-foreground sm:text-base">
+              One flow, three steps, and a ranked recommendation built from your repository signals.
+            </p>
 
-  <div className="hero-cta-row">
-    {session?.user ? (
-      <CtaLink href="/dashboard" label="Open dashboard" />
-    ) : (
-      <AuthButton redirectTo="/dashboard" />
-    )}
-    <Link
-      href="/pricing"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "10px 20px",
-        borderRadius: 10,
-        border: "1px solid rgba(255,255,255,0.1)",
-        background: "rgba(255,255,255,0.04)",
-        fontSize: 14,
-        fontWeight: 500,
-        color: "var(--text-secondary)",
-        textDecoration: "none",
-        transition: "border-color 0.15s, color 0.15s",
-      }}
-    >
-      See pricing →
-    </Link>
-  </div>
-</section>
+            {isLoggedIn ? (
+              <Button asChild size="lg" className="px-6">
+                <Link href="/dashboard">Open dashboard</Link>
+              </Button>
+            ) : (
+              <AuthButton redirectTo="/dashboard" />
+            )}
+          </div>
 
-      {/* ── How it works ─────────────────────────────────────────────────── */}
-      <section
-        style={{
-          maxWidth: 640,
-          width: "100%",
-          margin: "0 auto",
-          padding: "56px 0 48px",
-        }}
-      >
-        <p
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            color: "var(--text-muted)",
-            textAlign: "center",
-            marginBottom: 36,
-          }}
-        >
-          {"// how it works"}
-        </p>
+          <div className="space-y-10 md:space-y-14">
+            {JOURNEY_SHOTS.map((shot, index) => (
+              <section key={shot.title} className="space-y-4">
+                <p className="text-center font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+                  Step {index + 1}
+                </p>
+                <h2 className="text-center text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+                  {shot.title}
+                </h2>
+                <div className="overflow-hidden rounded-3xl bg-card/70 shadow-[0_26px_70px_rgba(4,8,20,0.26)]">
+                  <Image
+                    src={shot.src}
+                    alt={shot.alt}
+                    width={shot.width}
+                    height={shot.height}
+                    className="block h-auto w-full"
+                    priority={index === 0}
+                    sizes="(max-width: 1024px) 100vw, 1120px"
+                  />
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
+      </main>
 
-        <HowItWorks />
-      </section>
-
-      {/* ── Trust row ────────────────────────────────────────────────────── */}
-      {activeCount > 0 ? (
-        <div className="landing-trust-row">
-          {recentUsers.length > 0 ? (
-            <div className="landing-avatars">
-              {recentUsers.map((init, i) => (
-                <span
-                  key={i}
-                  className={`landing-avatar ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}
-                >
-                  {init}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          <span className="muted">
-            {activeCount} developer{activeCount !== 1 ? "s" : ""} shipped this week
-          </span>
-        </div>
-      ) : null}
-    </main>
+      <BottomScrollAction isLoggedIn={isLoggedIn} />
     </>
   );
 }

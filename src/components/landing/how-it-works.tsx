@@ -5,23 +5,23 @@ import { useState, useEffect } from "react";
 const STEPS = [
   {
     number: "01",
-    title: "Detects your app type",
-    desc: "Reads package.json, Dockerfile, CI configs, and more — zero setup.",
+    title: "Scans the repo signals",
+    desc: "Reads package.json, Dockerfile, CI workflows, env files, and infra folders with zero setup.",
   },
   {
     number: "02",
-    title: "Finds the best platform",
-    desc: "Scores Railway, Fly.io, Vercel, Render, and more against your stack.",
+    title: "Detects deployment shape",
+    desc: "Understands framework, runtime, topology, and the deployment pattern your codebase implies.",
   },
   {
     number: "03",
-    title: "Explains the tradeoffs",
-    desc: "You see why each platform fits — or doesn't — for your exact repo.",
+    title: "Scores 11 hosting platforms",
+    desc: "Compares Vercel, Railway, Render, Fly.io, and more against the exact needs of your repo.",
   },
   {
     number: "04",
-    title: "Hands you a deploy plan",
-    desc: "Step-by-step instructions, env vars, and config files ready to go.",
+    title: "Builds the deployment plan",
+    desc: "Returns blockers, tradeoffs, setup steps, and a saved recommendation you can revisit.",
   },
 ];
 
