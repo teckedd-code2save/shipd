@@ -3,6 +3,8 @@ import Link from "next/link";
 import { formatArchetypeLabel, formatRepoClassLabel, formatSeverityLabel, formatTopologyLabel } from "@/lib/archetypes/labels";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ArrowLeftIcon, SparklesIcon } from "@/components/ui/icons";
+import { Surface } from "@/components/ui/surface";
+import { Heading } from "@/components/ui/typography";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 import { PlanLimitError } from "@/server/services/plan-limit-service";
 import { findRepositoryById } from "@/server/services/repository-service";
@@ -54,14 +56,14 @@ export default async function ScanPage({
             <span>Scan details come from the same saved deployment workspace.</span>
           </div>
         </div>
-        <h1 style={{ fontSize: "clamp(22px, 4vw, 30px)", letterSpacing: "-0.03em", marginBottom: 6, marginTop: 0 }}>
+        <Heading as="h1" size="hero" className="mb-1.5 mt-0">
           What Shipd detected
-        </h1>
-        <p className="muted" style={{ marginBottom: 20, fontSize: 14 }}>
+        </Heading>
+        <p className="muted mb-5 text-[14px]">
           {repoLabel}
         </p>
-        <section className="panel" style={{ padding: 18, marginBottom: 18, display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Surface className="mb-[18px] grid gap-2.5 p-[18px]">
+          <div className="flex flex-wrap gap-2.5">
             <span className="repo-chip">{formatTopologyLabel(analysis.signals.repoTopology ?? "unknown")}</span>
             {analysis.signals.primaryAppRoot ? (
               <span className="repo-chip repo-chip-outline">App at: {formatRoot(analysis.signals.primaryAppRoot)}</span>
@@ -76,58 +78,55 @@ export default async function ScanPage({
             <span className="repo-chip">{analysis.evidence.length} signals found</span>
           </div>
           {analysis.classification.reasons.length > 0 ? (
-            <div className="muted" style={{ lineHeight: 1.7 }}>
+            <div className="muted leading-[1.7]">
               {analysis.classification.reasons.join(" ")}
             </div>
           ) : null}
-        </section>
-        <section className="panel" style={{ padding: 20 }}>
+        </Surface>
+        <Surface className="p-5">
           {analysis.findings.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "28px 0" }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Nothing to flag</div>
+            <div className="py-7 text-center">
+              <div className="mb-2 text-[15px] font-bold">Nothing to flag</div>
               <div className="muted">Shipd didn&apos;t find any deployment issues in this repository.</div>
             </div>
           ) : (
             analysis.findings.map((finding, index) => (
               <div
                 key={`${finding.filePath}-${finding.title}-${finding.lineNumber ?? "na"}-${index}`}
-                style={{
-                  padding: "14px 0",
-                  borderBottom: index < analysis.findings.length - 1 ? "1px solid var(--border)" : undefined
-                }}
+                className={index < analysis.findings.length - 1 ? "border-b border-[var(--border)] py-[14px]" : "py-[14px]"}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <strong style={{ fontFamily: "var(--font-mono)" }}>{finding.filePath}</strong>
+                <div className="mb-1.5 flex justify-between">
+                  <strong className="font-mono">{finding.filePath}</strong>
                   <span className="muted">{formatSeverityLabel(finding.severity)}</span>
                 </div>
                 <div>{finding.title}</div>
                 <div className="muted">{finding.detail}</div>
                 {finding.actionText ? (
-                  <div className="muted" style={{ marginTop: 6 }}>
+                  <div className="muted mt-1.5">
                     Action: {finding.actionText}
                   </div>
                 ) : null}
               </div>
             ))
           )}
-        </section>
+        </Surface>
         {analysis.evidence.length > 0 ? (
-          <section className="panel" style={{ padding: 20, marginTop: 18 }}>
-            <div style={{ fontWeight: 700, marginBottom: 12 }}>What Shipd found</div>
-            <div style={{ display: "grid", gap: 12 }}>
+          <Surface className="mt-[18px] p-5">
+            <div className="mb-3 text-[15px] font-bold">What Shipd found</div>
+            <div className="grid gap-3">
               {analysis.evidence.map((item, index) => (
-                <div key={`${item.sourceFile}-${item.kind}-${item.value}-${index}`} style={{ display: "grid", gap: 4 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div key={`${item.sourceFile}-${item.kind}-${item.value}-${index}`} className="grid gap-1">
+                  <div className="flex justify-between gap-3">
                     <strong>{item.value}</strong>
                     <span className="muted">{item.kind}</span>
                   </div>
-                  <div className="muted" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                  <div className="muted font-mono text-xs">
                     {item.sourceFile}
                   </div>
                 </div>
               ))}
             </div>
-          </section>
+          </Surface>
         ) : null}
       </main>
     </>

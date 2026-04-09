@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { ArrowUpRightIcon, SearchIcon, SparklesIcon } from "@/components/ui/icons";
+import { Surface } from "@/components/ui/surface";
 import type { DashboardRepository } from "@/types/repository";
 
 function formatLabel(value?: string) {
@@ -64,11 +65,11 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
   const unscannedCount = repos.length - scannedCount;
 
   return (
-    <section style={{ display: "grid", gap: 18 }}>
-      <div className="dashboard-toolbar panel">
+    <section className="repo-browser">
+      <Surface as="div" className="dashboard-toolbar">
         <div className="dashboard-toolbar-inner">
           <label className="dashboard-search-wrap">
-            <SearchIcon size={16} style={{ color: "var(--text-muted)" }} />
+            <SearchIcon size={16} className="dashboard-search-icon" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -96,11 +97,11 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
               ))}
             </div>
         </div>
-      </div>
+      </Surface>
 
       <div className="dashboard-card-grid">
         {paginatedRepos.map((repo) => (
-          <article key={repo.fullName} className="panel repo-card repo-card-sleek">
+          <Surface as="article" key={repo.fullName} className="repo-card repo-card-sleek">
             <div className="repo-card-topline">
               <span className="repo-chip repo-chip-outline">{formatLabel(repo.framework)}</span>
               <span className={repo.lastScanned === "Not yet scanned" ? "repo-chip" : "repo-chip repo-chip-accent"}>
@@ -108,10 +109,10 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
               </span>
             </div>
 
-            <div style={{ minWidth: 0 }}>
+            <div className="repo-card-content">
               <div className="repo-card-title">{repo.name}</div>
               <div className="repo-card-subtitle">{repo.owner}</div>
-              <div className="repo-meta-line" style={{ marginTop: 6 }}>
+              <div className="repo-meta-line repo-meta-offset">
                 {repo.fullName}
               </div>
             </div>
@@ -131,7 +132,7 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
               </div>
             </div>
 
-            <div className="repo-meta-line" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="repo-meta-line repo-tags-row">
               {repo.repoTopology ? <span className="repo-chip">{formatLabel(repo.repoTopology)}</span> : null}
               {repo.primaryAppRoot ? (
                 <span className="repo-chip repo-chip-outline">Primary app: {formatRoot(repo.primaryAppRoot)}</span>
@@ -142,7 +143,7 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
 
             <div className="repo-card-footer">
               <div className="repo-card-context">
-                <SparklesIcon size={15} style={{ color: "var(--accent-blue)" }} />
+                <SparklesIcon size={15} className="repo-context-icon" />
                 <span>
                   {repo.topPlatform
                     ? `Best fit: ${repo.topPlatform}`
@@ -154,18 +155,18 @@ export function RepoBrowser({ repos }: { repos: DashboardRepository[] }) {
                 <ArrowUpRightIcon size={16} />
               </Link>
             </div>
-          </article>
+          </Surface>
         ))}
       </div>
 
       {filteredRepos.length === 0 ? (
-        <section className="panel repo-empty-state">
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No repositories match this view</div>
+        <Surface className="repo-empty-state">
+          <div className="repo-empty-title">No repositories match this view</div>
           <div className="muted">Try a different search term or switch the scan-state filter.</div>
-        </section>
+        </Surface>
       ) : (
         <div className="dashboard-pagination">
-          <div className="muted" style={{ fontSize: 13 }}>
+          <div className="muted repo-pagination-copy">
             Showing {(activePage - 1) * pageSize + 1}-{Math.min(activePage * pageSize, filteredRepos.length)} of {filteredRepos.length}
           </div>
           <div className="dashboard-pagination-controls">

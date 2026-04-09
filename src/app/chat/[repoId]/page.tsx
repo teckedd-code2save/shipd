@@ -62,7 +62,7 @@ export default async function ChatPage({
               <Link href="/dashboard" className="chat-icon-link" aria-label="Back to dashboard">
                 <ArrowLeftIcon size={17} />
               </Link>
-              <GitHubIcon size={16} style={{ color: "var(--text-secondary)" }} />
+              <GitHubIcon size={16} className="chat-repo-icon" />
               <div>
                 <div className="chat-repo-title">{repository?.name ?? "Repository"}</div>
                 <div className="chat-repo-subtitle">{repoLabel}</div>
@@ -92,8 +92,8 @@ export default async function ChatPage({
                 {plan.fitType === "no_fit" || plan.score < 30 ? (
                   <>
                     <div className="chat-sidebar-label">Recommendation</div>
-                    <div className="chat-sidebar-platform" style={{ fontSize: "1rem" }}>No clear fit yet</div>
-                    <div className="chat-sidebar-copy" style={{ marginTop: 4 }}>Add deployment files and rescan.</div>
+                    <div className="chat-sidebar-platform chat-sidebar-platform-empty">No clear fit yet</div>
+                    <div className="chat-sidebar-copy chat-sidebar-copy-tight">Add deployment files and rescan.</div>
                   </>
                 ) : (
                   <>

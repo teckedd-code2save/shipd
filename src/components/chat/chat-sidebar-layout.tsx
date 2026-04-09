@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
 
+import { cn } from "@/lib/utils";
+import { Surface } from "@/components/ui/surface";
+
 export function ChatSidebarLayout({
   sidebar,
   children
@@ -20,9 +23,9 @@ export function ChatSidebarLayout({
         {open ? "Hide analysis" : "View analysis"}
       </button>
       <div className="chat-layout">
-        <aside className={`chat-sidebar panel${open ? " mobile-open" : ""}`}>
+        <Surface as="aside" className={cn("chat-sidebar", open && "mobile-open")}>
           {sidebar}
-        </aside>
+        </Surface>
         {children}
       </div>
     </>

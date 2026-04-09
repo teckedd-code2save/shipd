@@ -1,6 +1,8 @@
 import type { Route } from "next";
 import Link from "next/link";
 
+import { Surface } from "@/components/ui/surface";
+
 export function DashboardSidebar() {
   const items: Array<{ href: Route; label: string; meta: string }> = [
     { href: "/dashboard", label: "Repositories", meta: "Connected repos" },
@@ -9,22 +11,16 @@ export function DashboardSidebar() {
   ];
 
   return (
-    <aside className="panel dashboard-sidebar">
-      <nav style={{ display: "grid", gap: 8, marginBottom: 20 }}>
+    <Surface as="aside" className="dashboard-sidebar">
+      <nav className="dashboard-sidebar-nav">
         {items.map((item) => (
           <Link
             key={item.label}
             href={item.href}
-            style={{
-              display: "block",
-              border: "1px solid rgba(255, 255, 255, 0.06)",
-              borderRadius: 14,
-              background: "rgba(31, 35, 48, 0.72)",
-              padding: "12px 14px"
-            }}
+            className="dashboard-sidebar-link"
           >
-            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{item.label}</div>
-            <div className="muted" style={{ fontSize: 12 }}>{item.meta}</div>
+            <div className="dashboard-sidebar-link-label">{item.label}</div>
+            <div className="muted dashboard-sidebar-link-meta">{item.meta}</div>
           </Link>
         ))}
       </nav>
@@ -42,6 +38,6 @@ export function DashboardSidebar() {
           </div>
         </section>
       </div>
-    </aside>
+    </Surface>
   );
 }

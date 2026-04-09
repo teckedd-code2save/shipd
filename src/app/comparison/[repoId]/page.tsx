@@ -3,6 +3,8 @@ import Link from "next/link";
 import { formatArchetypeLabel, formatRepoClassLabel, formatTopologyLabel, formatVerdictLabel } from "@/lib/archetypes/labels";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ArrowLeftIcon } from "@/components/ui/icons";
+import { Surface } from "@/components/ui/surface";
+import { Heading, Kicker } from "@/components/ui/typography";
 import { getRepositoryAnalysis } from "@/server/services/analysis-service";
 
 function formatRoot(value?: string) {
@@ -10,11 +12,11 @@ function formatRoot(value?: string) {
   return value === "." ? "repo root" : value;
 }
 
-function scoreColor(score: number) {
-  if (score >= 75) return "var(--success)";
-  if (score >= 50) return "var(--warning)";
-  if (score >= 30) return "var(--text-secondary)";
-  return "var(--text-muted)";
+function scoreTone(score: number) {
+  if (score >= 75) return { text: "text-[var(--success)]", fill: "bg-[var(--success)]" } as const;
+  if (score >= 50) return { text: "text-[var(--warning)]", fill: "bg-[var(--warning)]" } as const;
+  if (score >= 30) return { text: "text-[var(--text-secondary)]", fill: "bg-[var(--text-secondary)]" } as const;
+  return { text: "text-[var(--text-muted)]", fill: "bg-[var(--text-muted)]" } as const;
 }
 
 function verdictBadgeClass(verdict: string) {
@@ -33,6 +35,7 @@ export default async function ComparisonPage({
   const recommendations = analysis.recommendations;
   const top = recommendations[0];
   const showFeatured = top !== undefined && top.score >= 30;
+  const topTone = top ? scoreTone(top.score) : null;
 
   return (
     <>
@@ -45,12 +48,12 @@ export default async function ComparisonPage({
           </Link>
         </div>
 
-        <section style={{ marginBottom: 28 }}>
-          <div className="dashboard-hero-kicker">Platform comparison</div>
-          <h1 style={{ fontSize: "clamp(22px, 4vw, 30px)", marginTop: 4, marginBottom: 12, letterSpacing: "-0.04em" }}>
+        <section className="mb-7">
+          <Kicker className="dashboard-hero-kicker">Platform comparison</Kicker>
+          <Heading as="h1" size="hero" className="mb-3 mt-1">
             Where does this repo fit?
-          </h1>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          </Heading>
+          <div className="flex flex-wrap gap-2">
             <span className="repo-chip">{formatTopologyLabel(analysis.signals.repoTopology ?? "unknown")}</span>
             <span className="repo-chip repo-chip-outline">{formatRepoClassLabel(analysis.classification.repoClass)}</span>
             <span className="repo-chip">{Math.round(analysis.classification.confidence * 100)}% confidence</span>
@@ -66,38 +69,38 @@ export default async function ComparisonPage({
         </section>
 
         {!showFeatured && (
-          <section className="panel" style={{ padding: 18, marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>No strong platform match found</div>
-            <div className="muted" style={{ lineHeight: 1.6 }}>
+          <Surface className="mb-5 p-[18px]">
+            <div className="mb-1.5 text-[15px] font-bold">No strong platform match found</div>
+            <div className="muted leading-[1.6]">
               {analysis.classification.reasons.join(" ")} Add deployment signals (a Dockerfile, runtime manifest, or platform config) and rescan.
             </div>
-          </section>
+          </Surface>
         )}
 
         {/* Featured top recommendation */}
         {showFeatured && top && (
-          <section className="panel comparison-featured" style={{ marginBottom: 16 }}>
+          <Surface className="comparison-featured mb-4">
             <div className="comparison-featured-header">
               <div>
                 <div className="comparison-featured-kicker">Top recommendation</div>
                 <div className="comparison-featured-name">
-                  <span aria-hidden="true" style={{ color: "var(--warning)", marginRight: 6 }}>★</span>
+                  <span aria-hidden="true" className="mr-1.5 text-[var(--warning)]">★</span>
                   {top.platform}
                 </div>
-                <div style={{ marginTop: 8 }}>
+                <div className="mt-2">
                   <span className={verdictBadgeClass(top.verdict)}>{formatVerdictLabel(top.verdict)}</span>
                 </div>
               </div>
-              <div className="comparison-featured-score" style={{ color: scoreColor(top.score) }}>
+              <div className={`comparison-featured-score ${topTone?.text}`}>
                 {top.score}
                 <span className="comparison-score-label">/100</span>
               </div>
             </div>
-            <div className="comparison-bar" style={{ marginBottom: 16 }}>
-              <div className="comparison-bar-fill" style={{ width: `${top.score}%`, background: scoreColor(top.score) }} />
+            <div className="comparison-bar mb-4">
+              <div className={`comparison-bar-fill ${topTone?.fill}`} style={{ width: `${top.score}%` }} />
             </div>
             {top.reasons.length > 0 && (
-              <ul className="comparison-reason-list" style={{ marginBottom: 12 }}>
+              <ul className="comparison-reason-list mb-3">
                 {top.reasons.map((reason, i) => <li key={i}>{reason}</li>)}
               </ul>
             )}
@@ -109,34 +112,38 @@ export default async function ComparisonPage({
               </div>
             )}
             {top.matchedArchetypes.filter(a => a !== "unknown_low_evidence").length > 0 && (
-              <div className="comparison-evidence" style={{ marginTop: 8 }}>
+              <div className="comparison-evidence mt-2">
                 {top.matchedArchetypes.filter(a => a !== "unknown_low_evidence").map((item) => (
                   <span key={item} className="repo-chip">{formatArchetypeLabel(item)}</span>
                 ))}
               </div>
             )}
-          </section>
+          </Surface>
         )}
 
         {/* Ranked list — all others (or all if no featured) */}
-        <section className="panel" style={{ overflow: "hidden" }}>
-          <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 12, color: "var(--text-secondary)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+        <Surface className="overflow-hidden">
+          <div className="border-b border-[var(--border)] px-5 py-3 text-[12px] font-semibold tracking-[0.04em] text-[var(--text-secondary)] uppercase">
             All platforms — ranked by fit
           </div>
           {recommendations.map((option, index) => {
             if (showFeatured && index === 0) return null;
             const isLast = index === recommendations.length - 1;
+            const tone = scoreTone(option.score);
             return (
-              <div key={option.platform} className="comparison-row" style={{ borderBottom: isLast ? undefined : "1px solid var(--border)" }}>
+              <div
+                key={option.platform}
+                className={isLast ? "comparison-row" : "comparison-row border-b border-[var(--border)]"}
+              >
                 <div className="comparison-row-rank">{index + 1}</div>
                 <div className="comparison-row-body">
                   <div className="comparison-row-header">
                     <strong className="comparison-row-name">{option.platform}</strong>
                     <span className={verdictBadgeClass(option.verdict)}>{formatVerdictLabel(option.verdict)}</span>
-                    <span className="comparison-row-score" style={{ color: scoreColor(option.score) }}>{option.score}/100</span>
+                    <span className={`comparison-row-score ${tone.text}`}>{option.score}/100</span>
                   </div>
                   <div className="comparison-bar comparison-row-bar">
-                    <div className="comparison-bar-fill" style={{ width: `${option.score}%`, background: scoreColor(option.score) }} />
+                    <div className={`comparison-bar-fill ${tone.fill}`} style={{ width: `${option.score}%` }} />
                   </div>
                   {option.reasons[0] && (
                     <div className="comparison-row-reason">{option.reasons[0]}</div>
@@ -148,7 +155,7 @@ export default async function ComparisonPage({
               </div>
             );
           })}
-        </section>
+        </Surface>
       </main>
     </>
   );

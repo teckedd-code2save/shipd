@@ -13,16 +13,7 @@ export async function SiteHeader() {
 
   return (
     <header className="site-header">
-      <div
-        style={{
-          maxWidth: 1360,
-          margin: "0 auto",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          position: "relative",
-        }}
-      >
+      <div className="site-header-inner">
         <Link href="/" className="site-header-brand">
           Shipd
         </Link>

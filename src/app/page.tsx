@@ -6,6 +6,7 @@ import { AuthButton } from "@/components/auth/auth-button";
 import { BottomScrollAction } from "@/components/landing/bottom-scroll-action";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Heading, Lead } from "@/components/ui/typography";
 
 const JOURNEY_SHOTS = [
   {
@@ -46,16 +47,16 @@ export default async function LandingPage() {
               Repo-aware deployment planning
             </Badge>
 
-            <h1 className="landing-homepage-title text-balance">
+            <Heading as="h1" size="display" className="landing-homepage-title">
               Choose your repo, scan it, and see where it should ship.
-            </h1>
+            </Heading>
 
-            <p className="max-w-2xl text-balance text-[15px] leading-7 text-muted-foreground sm:text-base">
+            <Lead className="max-w-2xl">
               One flow, three steps, and a ranked recommendation built from your repository signals.
-            </p>
+            </Lead>
 
             {isLoggedIn ? (
-              <Button asChild size="lg" className="px-6">
+              <Button asChild variant="brand" size="lg" className="h-11 rounded-full px-6">
                 <Link href="/dashboard">Open dashboard</Link>
               </Button>
             ) : (
@@ -69,9 +70,9 @@ export default async function LandingPage() {
                 <p className="text-center font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
                   Step {index + 1}
                 </p>
-                <h2 className="text-center text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+                <Heading as="h2" size="hero" className="text-center font-semibold text-foreground">
                   {shot.title}
-                </h2>
+                </Heading>
                 <div className="overflow-hidden rounded-3xl bg-card/70 shadow-[0_26px_70px_rgba(4,8,20,0.26)]">
                   <Image
                     src={shot.src}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getPlatformSteps } from "@/lib/analysis/platform-steps";
 import { SendIcon, SparklesIcon } from "@/components/ui/icons";
+import { Surface, SurfaceDescription, SurfaceHeader, SurfaceTitle } from "@/components/ui/surface";
 
 type PlanFitType = "clean" | "multi_service" | "no_fit";
 
@@ -505,11 +506,11 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   }
 
   return (
-    <section className="chat-workspace panel">
-      <div className="chat-workspace-header">
+    <Surface className="chat-workspace" tone="muted">
+      <SurfaceHeader className="chat-workspace-header">
         <div>
-          <div className="chat-workspace-title">{initialPlan.title}</div>
-          <div className="chat-workspace-copy">Ask anything about deploying this repo — tradeoffs, blockers, or platform differences.</div>
+          <SurfaceTitle className="chat-workspace-title">{initialPlan.title}</SurfaceTitle>
+          <SurfaceDescription className="chat-workspace-copy">Ask anything about deploying this repo — tradeoffs, blockers, or platform differences.</SurfaceDescription>
         </div>
         <div className="chat-workspace-chips">
           {initialPlan.fitType !== "no_fit" && initialPlan.score >= 30 ? (
@@ -521,7 +522,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
             <span className="repo-chip">No clear fit detected</span>
           )}
         </div>
-      </div>
+      </SurfaceHeader>
 
       <div className="chat-thread">
         {messages.map((msg) =>
@@ -573,6 +574,6 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           Try: &quot;Do I need a Dockerfile?&quot;, &quot;Why not Vercel?&quot;, or &quot;Write me a railway.toml&quot;.
         </div>
       </div>
-    </section>
+    </Surface>
   );
 }
