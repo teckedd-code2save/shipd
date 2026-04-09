@@ -65,6 +65,7 @@ const SCAN_TARGETS = [
 ] as const;
 
 const WORKSPACE_DIRECTORIES = ["apps", "packages", "services", "sites"] as const;
+const SERVICE_HINT_DIRECTORIES = ["worker", "workers", "backend", "server", "api", "cloudflare"] as const;
 const INFRA_DIRECTORIES = ["infra", "infrastructure", "terraform", "deploy", ".deploy", "k8s", "kubernetes", "helm"] as const;
 const MAX_INFRA_FILES = 40;
 const MAX_NOTEBOOK_FILES = 6;
@@ -111,7 +112,7 @@ const WORKSPACE_SCAN_TARGETS = [
 ] as const;
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".cs", ".go", ".rs", ".java"] as const;
-const SOURCE_DIRECTORIES = ["src", "app", "pages", "api", "controllers"] as const;
+const SOURCE_DIRECTORIES = ["src", "app", "pages", "api", "controllers", "worker", "workers"] as const;
 
 const MAX_DOTNET_PROJECT_FILES = 12;
 
@@ -458,6 +459,32 @@ export async function loadRepositoryFilesFromGitHub(args: {
         })
       );
     }
+
+    const hintedServiceDirectories = rootEntries
+      .filter(
+        (entry) => entry.type === "dir" && SERVICE_HINT_DIRECTORIES.includes(entry.name as (typeof SERVICE_HINT_DIRECTORIES)[number])
+      )
+      .map((entry) => entry.path);
+
+    await Promise.all(
+      hintedServiceDirectories.flatMap((directory) =>
+        WORKSPACE_SCAN_TARGETS.map(async (target) => {
+          const path = `${directory}/${target}`;
+          try {
+            const file = await getRepositoryFile(
+              args.token,
+              args.owner,
+              args.repo,
+              path,
+              args.defaultBranch
+            );
+            fileMap[file.path] = file.content;
+          } catch {
+            // Directory hint targets are best-effort.
+          }
+        })
+      )
+    );
   } catch {
     // Root directory listing may fail on some repositories.
   }

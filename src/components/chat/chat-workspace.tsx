@@ -251,42 +251,25 @@ function NoFitCard({ plan }: { plan: DeploymentPlan }) {
   const isMulti = plan.fitType === "multi_service";
   const isGuidance = plan.planMode === "guidance_plan";
   return (
-    <div className="no-fit-card">
+    <div className={`no-fit-card${isGuidance ? " no-fit-card-guidance" : ""}`}>
       <div className="no-fit-badge">
-        {isGuidance ? "Guidance mode" : isMulti ? "Multi-service repository" : "No clean platform fit"}
+        {isGuidance ? "Repository context" : isMulti ? "Multi-service repository" : "No clean platform fit"}
       </div>
       <p className="no-fit-copy">{plan.summary}</p>
-      {isGuidance && plan.guidanceTracks && plan.guidanceTracks.length > 0 ? (
+      {isGuidance ? (
         <>
-          <div className="no-fit-section-label">Guidance tracks</div>
-          <div className="guidance-tracks">
-            {plan.guidanceTracks.map((track, i) => (
-              <div key={`${track.title}-${i}`} className="guidance-track">
-                <div className="guidance-track-title">{track.title}</div>
-                <p className="guidance-track-description">{track.description}</p>
-                <ul className="guidance-track-actions">
-                  {track.actions.map((action, actionIndex) => (
-                    <li key={actionIndex}>{action}</li>
-                  ))}
-                </ul>
-                {track.docs && track.docs.length > 0 ? (
-                  <div className="guidance-track-docs">
-                    {track.docs.map((docUrl, docIndex) => (
-                      <a
-                        key={`${docUrl}-${docIndex}`}
-                        href={docUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="guidance-track-doc"
-                      >
-                        Reference
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          {plan.nextSteps.length > 0 ? (
+            <>
+              <div className="no-fit-section-label">Next concrete steps</div>
+              <ul className="no-fit-actions">
+                {plan.nextSteps.slice(0, 5).map((step, index) => (
+                  <li key={`${step}-${index}`} className="no-fit-action-item">
+                    {step}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </>
       ) : plan.altPaths && plan.altPaths.length > 0 ? (
         <>
@@ -349,7 +332,7 @@ function PlanCard({
         </div>
       )}
 
-      {plan.warnings.length > 0 && (
+      {!isGuidance && plan.warnings.length > 0 && (
         <div className="chat-plan-section">
           <div className="chat-plan-section-label">Worth addressing</div>
           <div className="chat-plan-issues">
@@ -417,12 +400,12 @@ function buildLead({ repoLabel, initialPlan, repoClass, framework, runtime, prim
 
   if (isGuidance) {
     if (repoClass === "notebook_repo" || framework === "python") {
-      return `${repoLabel}${rootSuffix} is being handled in guidance mode. Shipd will walk you through turning notebooks into a deployable product path without forcing a platform recommendation.`;
+      return `${repoLabel}${rootSuffix} is notebook-oriented. Shipd will start with the best production path for serving and packaging this work.`;
     }
     if (framework === "flutter" || repoClass === "mobile_app") {
-      return `${repoLabel}${rootSuffix} is a Flutter/mobile project. Shipd will guide web and mobile release tracks instead of forcing a single-host platform plan.`;
+      return `${repoLabel}${rootSuffix} is a Flutter/mobile project. Shipd will focus on web and store release tracks, then backend pairing if needed.`;
     }
-    return `${repoLabel}${rootSuffix} is in guidance mode. Shipd will focus on concrete next actions to make this repo deployable before platform selection.`;
+    return `${repoLabel}${rootSuffix} does not map to a one-click host yet. Shipd will start from repo context and concrete go-live steps.`;
   }
   if (repoClass === "insufficient_evidence" || repoClass === "notebook_repo" || repoClass === "library_or_package") {
     return `Shipd couldn't find enough deployment signals in ${repoLabel} to make a strong call yet. Work through the steps below to surface a cleaner path.`;
@@ -439,7 +422,12 @@ function buildLead({ repoLabel, initialPlan, repoClass, framework, runtime, prim
   return `${repoLabel}${rootSuffix} — ${initialPlan.topPlatform} scores ${initialPlan.score}/100. Expand each step below to deploy.`;
 }
 
-function buildQuickPrompts({ framework, runtime, initialPlan }: Pick<ChatWorkspaceProps, "framework" | "runtime" | "initialPlan">) {
+function buildQuickPrompts({
+  framework,
+  runtime,
+  repoClass,
+  initialPlan
+}: Pick<ChatWorkspaceProps, "framework" | "runtime" | "repoClass" | "initialPlan">) {
   if (initialPlan.planMode === "guidance_plan") {
     if (framework === "flutter") {
       return [
@@ -448,10 +436,17 @@ function buildQuickPrompts({ framework, runtime, initialPlan }: Pick<ChatWorkspa
         "What backend path should pair with this app?"
       ];
     }
+    if (repoClass === "notebook_repo") {
+      return [
+        "Best path for notebooks and data-science repos",
+        "How do I productionize this repository?",
+        "What should I add so Shipd can generate a platform plan?"
+      ];
+    }
     return [
-      "Best path for notebooks and data-science repos",
-      "How do I productionize this repository?",
-      "What should I add so Shipd can generate a platform plan?"
+      "What does the README suggest as the deployment path?",
+      "Give me a concrete go-live checklist for this repo",
+      "What exact files should I add next?"
     ];
   }
 
@@ -505,8 +500,8 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     [framework, initialPlan, primaryAppRoot, repoClass, repoId, repoLabel, runtime]
   );
   const quickPrompts = useMemo(
-    () => buildQuickPrompts({ framework, runtime, initialPlan }),
-    [framework, runtime, initialPlan]
+    () => buildQuickPrompts({ framework, runtime, repoClass, initialPlan }),
+    [framework, runtime, repoClass, initialPlan]
   );
 
   const initialBubble: ChatBubble = useMemo(
@@ -674,7 +669,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           <SurfaceTitle className="chat-workspace-title">{initialPlan.title}</SurfaceTitle>
           <SurfaceDescription className="chat-workspace-copy">
             {isGuidanceMode
-              ? "Ask about productionization paths, readiness gaps, and what to add before choosing a platform."
+              ? "Repo-specific guidance based on detected signals and README context."
               : "Ask anything about deploying this repo — tradeoffs, blockers, or platform differences."}
           </SurfaceDescription>
           {voiceMessage ? <div className="chat-voice-note">{voiceMessage}</div> : null}
@@ -697,7 +692,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
               <span className="repo-chip">{initialPlan.score}/100 fit</span>
             </>
           ) : (
-            <span className="repo-chip">{isGuidanceMode ? "Guidance mode" : "No clear fit detected"}</span>
+            <span className="repo-chip">{isGuidanceMode ? "Context plan" : "No clear fit detected"}</span>
           )}
         </div>
       </SurfaceHeader>
@@ -750,7 +745,7 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
         </div>
         <div className="chat-input-hint">
           {isGuidanceMode
-            ? "Try: “What should I add to make this deployable?”, “How do I productionize this repo?”, or “Give me a go-live checklist”."
+            ? "Try: \"What should I ship first?\", \"Give me a concrete go-live checklist\", or \"What should I add next?\"."
             : "Try: “Do I need a Dockerfile?”, “Why not Vercel?”, or “Write me a railway.toml”."}
         </div>
       </div>

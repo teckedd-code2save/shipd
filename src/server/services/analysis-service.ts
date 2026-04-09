@@ -55,13 +55,13 @@ export interface RepositoryAnalysisSnapshot {
 }
 
 const ACTIVE_RECOMMENDATION_VERSION = {
-  label: "v6-orm-detection",
-  extractorVersion: "3.0.0",
-  classifierVersion: "3.0.0",
-  archetypeVersion: "3.0.0",
-  mappingVersion: "3.0.0",
-  guideVersion: "3.0.0",
-  aiVersion: "3.0.0"
+  label: "v7-guidance-readme-grounded",
+  extractorVersion: "3.1.0",
+  classifierVersion: "3.1.0",
+  archetypeVersion: "3.1.0",
+  mappingVersion: "3.1.0",
+  guideVersion: "3.1.0",
+  aiVersion: "3.1.0"
 } as const;
 
 function loadRepositoryFixture(_repoId: string): RepositoryFileMap {
@@ -185,7 +185,8 @@ function createPlanFromSnapshot(
       ? resolveGuidancePlaybook({
           repoClass: classification.repoClass,
           framework: signals?.framework,
-          signals
+          signals,
+          findings
         })
       : null;
   const isCliTool = classification.repoClass === "cli_tool";
@@ -219,7 +220,7 @@ function createPlanFromSnapshot(
 
   const nextSteps =
     guidancePlaybook
-      ? guidancePlaybook.tracks.flatMap((track) => track.actions.slice(0, 1))
+      ? Array.from(new Set(guidancePlaybook.tracks.flatMap((track) => track.actions))).slice(0, 5)
       : isCliTool
       ? [
           "Create a GitHub Release to distribute the compiled binary",
@@ -313,6 +314,80 @@ function isRepoSignals(value: unknown): value is RepoSignals {
 
 function normalizeStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function mergeStringArrays(left: string[], right: string[]) {
+  return Array.from(new Set([...left, ...right]));
+}
+
+function mergeEvidenceRecords(
+  left: EvidenceRecord[],
+  right: EvidenceRecord[]
+): EvidenceRecord[] {
+  const map = new Map<string, EvidenceRecord>();
+
+  for (const item of [...left, ...right]) {
+    const key = `${item.kind}|${item.value}|${item.sourceFile}|${item.sourceLine ?? 0}`;
+    map.set(key, item);
+  }
+
+  return Array.from(map.values());
+}
+
+function mergeFindings(left: ScanFinding[], right: ScanFinding[]): ScanFinding[] {
+  const map = new Map<string, ScanFinding>();
+
+  for (const item of [...left, ...right]) {
+    const key = `${item.filePath}|${item.severity}|${item.title}|${item.lineNumber ?? 0}`;
+    map.set(key, item);
+  }
+
+  return Array.from(map.values());
+}
+
+function chooseKnownString<T extends string>(preferred: T | undefined, fallback: T | undefined, unknownValue: T): T {
+  if (preferred && preferred !== unknownValue) return preferred;
+  if (fallback && fallback !== unknownValue) return fallback;
+  return unknownValue;
+}
+
+function mergeRepoSignals(base: RepoSignals, overlay: RepoSignals): RepoSignals {
+  return {
+    repoTopology: chooseKnownString(overlay.repoTopology, base.repoTopology, "unknown"),
+    workspaceRoots: mergeStringArrays(base.workspaceRoots, overlay.workspaceRoots),
+    appRoots: mergeStringArrays(base.appRoots, overlay.appRoots),
+    primaryAppRoot: overlay.primaryAppRoot ?? base.primaryAppRoot,
+    dotnetAppType: chooseKnownString(overlay.dotnetAppType, base.dotnetAppType, "unknown"),
+    framework: chooseKnownString(overlay.framework, base.framework, "unknown"),
+    runtime: chooseKnownString(overlay.runtime, base.runtime, "unknown"),
+    hasDockerfile: base.hasDockerfile || overlay.hasDockerfile,
+    dockerfilePaths: mergeStringArrays(base.dockerfilePaths, overlay.dockerfilePaths),
+    hasCustomServer: base.hasCustomServer || overlay.hasCustomServer,
+    envVars: mergeStringArrays(base.envVars, overlay.envVars),
+    envFilePaths: mergeStringArrays(base.envFilePaths, overlay.envFilePaths),
+    hasCiWorkflow: base.hasCiWorkflow || overlay.hasCiWorkflow,
+    hasBuildWorkflow: base.hasBuildWorkflow || overlay.hasBuildWorkflow,
+    workflowFiles: mergeStringArrays(base.workflowFiles, overlay.workflowFiles),
+    detectedPlatformConfigs: mergeStringArrays(base.detectedPlatformConfigs, overlay.detectedPlatformConfigs),
+    platformConfigFiles: mergeStringArrays(base.platformConfigFiles, overlay.platformConfigFiles),
+    infrastructureFiles: mergeStringArrays(base.infrastructureFiles, overlay.infrastructureFiles),
+    hasInfrastructureCode: base.hasInfrastructureCode || overlay.hasInfrastructureCode,
+    deploymentDescriptorFiles: mergeStringArrays(base.deploymentDescriptorFiles, overlay.deploymentDescriptorFiles),
+    pythonProjectFiles: mergeStringArrays(base.pythonProjectFiles, overlay.pythonProjectFiles),
+    flutterProjectFiles: mergeStringArrays(base.flutterProjectFiles, overlay.flutterProjectFiles),
+    csharpProjectFiles: mergeStringArrays(base.csharpProjectFiles, overlay.csharpProjectFiles),
+    goProjectFiles: mergeStringArrays(base.goProjectFiles, overlay.goProjectFiles),
+    rubyProjectFiles: mergeStringArrays(base.rubyProjectFiles, overlay.rubyProjectFiles),
+    javaProjectFiles: mergeStringArrays(base.javaProjectFiles, overlay.javaProjectFiles),
+    rustProjectFiles: mergeStringArrays(base.rustProjectFiles, overlay.rustProjectFiles),
+    phpProjectFiles: mergeStringArrays(base.phpProjectFiles, overlay.phpProjectFiles),
+    orm: overlay.orm ?? base.orm,
+    hasMigrations: base.hasMigrations || overlay.hasMigrations,
+    notebookFiles: mergeStringArrays(base.notebookFiles, overlay.notebookFiles),
+    hasFlutterWebTarget: base.hasFlutterWebTarget || overlay.hasFlutterWebTarget,
+    hasFlutterMobileTargets: base.hasFlutterMobileTargets || overlay.hasFlutterMobileTargets,
+    scannedFiles: Math.max(base.scannedFiles, overlay.scannedFiles)
+  };
 }
 
 function normalizeRepoSignals(value: RepoSignals): RepoSignals {
@@ -482,6 +557,7 @@ async function loadRepositoryFiles(repoId: string) {
 
 async function computeRepositoryAnalysis(repoId: string): Promise<RepositoryAnalysisSnapshot> {
   const files = await loadRepositoryFiles(repoId);
+  const deterministic = scanRepositoryFiles(files);
 
   let signals: RepoSignals;
   let classification: RepoClassificationResult;
@@ -491,23 +567,23 @@ async function computeRepositoryAnalysis(repoId: string): Promise<RepositoryAnal
 
   try {
     const extraction = await extractRepoSignals(files, env.AI_PROVIDER);
-    signals = extraction.signals;
+    signals = mergeRepoSignals(deterministic.signals, extraction.signals);
+    evidence = mergeEvidenceRecords(deterministic.evidence, extraction.evidence);
+    findings = mergeFindings(deterministic.findings, extraction.findings);
     const deterministicClassification = classifyRepository(signals);
+    const shouldPreferDeterministic =
+      deterministicClassification.repoClass !== "insufficient_evidence" ||
+      extraction.classification.repoClass === "insufficient_evidence" ||
+      deterministicClassification.confidence >= extraction.classification.confidence;
     classification =
-      deterministicClassification.confidence >= extraction.classification.confidence ||
-      deterministicClassification.repoClass === "mobile_app" ||
-      deterministicClassification.repoClass === "notebook_repo" ||
-      deterministicClassification.repoClass === "cli_tool"
+      shouldPreferDeterministic
         ? deterministicClassification
         : extraction.classification;
-    archetypes = matchArchetypes({ signals, classification, evidence: extraction.evidence });
-    findings = extraction.findings;
-    evidence = extraction.evidence;
+    archetypes = matchArchetypes({ signals, classification, evidence });
   } catch {
-    const scanned = scanRepositoryFiles(files);
-    signals = scanned.signals;
-    findings = scanned.findings;
-    evidence = scanned.evidence;
+    signals = deterministic.signals;
+    findings = deterministic.findings;
+    evidence = deterministic.evidence;
     classification = classifyRepository(signals);
     archetypes = matchArchetypes({ signals, classification, evidence });
   }

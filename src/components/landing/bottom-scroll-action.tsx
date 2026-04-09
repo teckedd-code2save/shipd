@@ -16,8 +16,11 @@ export function BottomScrollAction({ isLoggedIn }: BottomScrollActionProps) {
   useEffect(() => {
     const onScroll = () => {
       const doc = document.documentElement;
+      const totalScrollable = doc.scrollHeight - window.innerHeight;
       const remaining = doc.scrollHeight - (window.scrollY + window.innerHeight);
-      setShow(remaining <= 180);
+      const hasMeaningfulScroll = totalScrollable > 260;
+      const hasMoved = window.scrollY > 120;
+      setShow(hasMeaningfulScroll && hasMoved && remaining <= 180);
     };
 
     onScroll();
@@ -37,7 +40,12 @@ export function BottomScrollAction({ isLoggedIn }: BottomScrollActionProps) {
         show ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
       )}
     >
-      <Button asChild size="lg" className="pointer-events-auto px-6 shadow-[0_18px_40px_rgba(10,14,28,0.5)]">
+      <Button
+        asChild
+        variant="brand"
+        size="lg"
+        className="pointer-events-auto h-11 rounded-full px-6 shadow-[0_18px_40px_rgba(10,14,28,0.5)]"
+      >
         <Link href={isLoggedIn ? "/dashboard" : "/pricing"}>
           {isLoggedIn ? "Open dashboard" : "Start with your repo"}
         </Link>
