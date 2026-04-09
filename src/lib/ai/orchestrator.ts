@@ -24,11 +24,19 @@ When generating a deployment plan, produce a "steps" array with 4–8 concrete, 
 
 Steps should follow the order: setup → config → deploy → verify. Be specific to the detected platform and framework.`;
 
+  const guidanceAwareSystem = `${structuredSystem}
+
+If context includes "Plan mode: guidance_plan", do not recommend any platform as "best".
+For guidance mode:
+- use "Guidance" as topPlatform in structured output
+- keep guidance neutral and repo-type-specific
+- focus on productionization steps, not provider-specific deployment commands`;
+
   try {
     object = await adapter.generateObject<DeploymentPlanObject>({
       provider,
       schema: deploymentPlanSchema,
-      system: structuredSystem,
+      system: guidanceAwareSystem,
       prompt,
       parse: (value) => deploymentPlanSchema.parse(value)
     });

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { SiteHeader } from "@/components/layout/site-header";
+import { Surface } from "@/components/ui/surface";
+import { Heading, Lead } from "@/components/ui/typography";
 import {
   getOverviewMetrics,
   getTopUsers,
@@ -69,11 +71,11 @@ export default async function AdminPage() {
     <>
       <SiteHeader />
       <main className="page">
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 700, letterSpacing: "-0.04em", marginBottom: 6, marginTop: 0 }}>
+        <div className="mb-7">
+          <Heading as="h1" size="hero" className="mb-1.5 mt-0">
             Metrics
-          </h1>
-          <p className="muted" style={{ margin: 0, fontSize: 14 }}>Live usage stats — visible to admins only.</p>
+          </Heading>
+          <Lead className="muted text-sm">Live usage stats — visible to admins only.</Lead>
         </div>
 
         {/* Overview stats */}
@@ -86,7 +88,7 @@ export default async function AdminPage() {
         </div>
 
         {/* Scan activity sparkline */}
-        <div className="panel admin-section" style={{ marginBottom: 24 }}>
+        <Surface className="admin-section mb-6">
           <div className="admin-section-head">
             <div>
               <div className="admin-section-title">Scan activity</div>
@@ -98,11 +100,11 @@ export default async function AdminPage() {
             <span>{dailyScans[0]?.date}</span>
             <span>{dailyScans[dailyScans.length - 1]?.date}</span>
           </div>
-        </div>
+        </Surface>
 
         <div className="admin-two-col">
           {/* Platform distribution */}
-          <div className="panel admin-section">
+          <Surface className="admin-section">
             <div className="admin-section-head">
               <div className="admin-section-title">Top recommended platforms</div>
             </div>
@@ -117,12 +119,12 @@ export default async function AdminPage() {
                   />
                 </div>
               ))}
-              {platformStats.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No data yet.</div>}
+              {platformStats.length === 0 && <div className="muted text-[13px]">No data yet.</div>}
             </div>
-          </div>
+          </Surface>
 
           {/* Recent scans feed */}
-          <div className="panel admin-section">
+          <Surface className="admin-section">
             <div className="admin-section-head">
               <div className="admin-section-title">Recent scans</div>
             </div>
@@ -138,13 +140,13 @@ export default async function AdminPage() {
                   <div className="admin-feed-time">{timeAgo(s.scannedAt)}</div>
                 </div>
               ))}
-              {recentScans.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No scans yet.</div>}
+              {recentScans.length === 0 && <div className="muted text-[13px]">No scans yet.</div>}
             </div>
-          </div>
+          </Surface>
         </div>
 
         {/* Top users table */}
-        <div className="panel admin-section">
+        <Surface className="admin-section">
           <div className="admin-section-head">
             <div className="admin-section-title">Users</div>
             <div className="admin-section-sub">{overview.totalUsers} total</div>
@@ -185,12 +187,12 @@ export default async function AdminPage() {
                   </tr>
                 ))}
                 {topUsers.length === 0 && (
-                  <tr><td colSpan={5} className="muted" style={{ fontSize: 13 }}>No users yet.</td></tr>
+                  <tr><td colSpan={5} className="muted text-[13px]">No users yet.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-        </div>
+        </Surface>
       </main>
     </>
   );

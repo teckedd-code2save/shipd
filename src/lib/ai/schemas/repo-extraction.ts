@@ -9,12 +9,12 @@ export const repoExtractionSchema = z.object({
     dotnetAppType: z.enum(["web", "generic", "unknown"]),
     framework: z.enum([
       "nextjs", "sveltekit", "nuxt", "remix", "astro",
-      "express", "react", "python", "csharp",
+      "express", "react", "python", "flutter", "csharp",
       "go", "rust", "ruby", "java", "php", "unknown"
     ]),
     runtime: z.enum([
       "node18", "node20", "bun",
-      "python", "dotnet",
+      "python", "dart", "dotnet",
       "go", "rust", "ruby", "java", "php",
       "unknown"
     ]),
@@ -32,6 +32,7 @@ export const repoExtractionSchema = z.object({
     hasInfrastructureCode: z.boolean(),
     deploymentDescriptorFiles: z.array(z.string()),
     pythonProjectFiles: z.array(z.string()),
+    flutterProjectFiles: z.array(z.string()).default([]),
     csharpProjectFiles: z.array(z.string()),
     goProjectFiles: z.array(z.string()),
     rubyProjectFiles: z.array(z.string()).default([]),
@@ -49,6 +50,8 @@ export const repoExtractionSchema = z.object({
     ]).optional(),
     hasMigrations: z.boolean().default(false),
     notebookFiles: z.array(z.string()),
+    hasFlutterWebTarget: z.boolean().default(false),
+    hasFlutterMobileTargets: z.boolean().default(false),
     scannedFiles: z.number().int().min(0)
   }),
   classification: z.object({
@@ -57,6 +60,7 @@ export const repoExtractionSchema = z.object({
       "static_site",
       "service_app",
       "python_service",
+      "mobile_app",
       "cloudflare_worker_app",
       "library_or_package",
       "notebook_repo",

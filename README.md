@@ -87,6 +87,12 @@ OPENAI_MODEL=gpt-4.1-mini
 # AI_PROVIDER=anthropic
 # ANTHROPIC_API_KEY=your-anthropic-api-key
 # ANTHROPIC_MODEL=claude-3-5-sonnet-latest
+
+# Optional voice summaries (ElevenLabs TTS)
+VOICE_ENABLED=false
+ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_ID=
+ELEVENLABS_MODEL=eleven_turbo_v2_5
 ```
 
 If `DATABASE_URL` is absent, auth falls back to JWT-only sessions with no data persistence.

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+
 import { PLAN_PRICES } from "@/config/plans";
+import { Surface } from "@/components/ui/surface";
+import { Heading, Kicker, Lead } from "@/components/ui/typography";
 
 export const metadata: Metadata = {
   title: "Upgrade — Shipd",
@@ -49,89 +52,27 @@ export default async function UpgradePage({
   );
 
   return (
-    <main
-      style={{
-        background: "var(--bg-base)",
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "40px 20px",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 480,
-          width: "100%",
-          background: "var(--bg-surface)",
-          border: "1px solid var(--border)",
-          padding: "48px 40px",
-          textAlign: "center",
-        }}
-      >
+    <main className="upgrade-page">
+      <Surface className="upgrade-card">
         {/* Status badge */}
-        <div
-          style={{
-            display: "inline-block",
-            fontSize: 10,
-            letterSpacing: 2,
-            textTransform: "uppercase",
-            color: "var(--accent-blue)",
-            border: "1px solid rgba(91,108,242,0.3)",
-            padding: "4px 12px",
-            marginBottom: 28,
-            fontFamily: "var(--font-mono)",
-          }}
-        >
+        <Kicker className="upgrade-kicker">
           Coming soon
-        </div>
+        </Kicker>
 
-        <h1
-          style={{
-            fontSize: 28,
-            fontWeight: 700,
-            color: "var(--text-primary)",
-            marginBottom: 8,
-          }}
-        >
+        <Heading as="h1" size="hero" className="upgrade-title">
           {info.name} — {info.price}
-        </h1>
-        <p
-          style={{
-            fontSize: 13,
-            color: "var(--text-secondary)",
-            lineHeight: 1.6,
-            marginBottom: 32,
-          }}
-        >
+        </Heading>
+        <Lead className="upgrade-copy">
           Billing is being set up. Drop us a line and you&apos;ll be first to
           know the moment paid plans go live — we&apos;ll honour your interest
           with a discount.
-        </p>
+        </Lead>
 
         {/* Feature list */}
-        <ul
-          style={{
-            listStyle: "none",
-            padding: 0,
-            marginBottom: 32,
-            textAlign: "left",
-          }}
-        >
+        <ul className="upgrade-feature-list">
           {info.features.map((f) => (
-            <li
-              key={f}
-              style={{
-                fontSize: 12,
-                color: "var(--text-secondary)",
-                padding: "6px 0",
-                borderBottom: "1px solid var(--border)",
-                display: "flex",
-                gap: 10,
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              <span style={{ color: "var(--accent-blue)" }}>✓</span>
+            <li key={f} className="upgrade-feature-item">
+              <span className="upgrade-feature-check">✓</span>
               {f}
             </li>
           ))}
@@ -140,18 +81,14 @@ export default async function UpgradePage({
         {/* CTA */}
         <a
           href={`mailto:hello@shipd.io?subject=${mailtoSubject}&body=${mailtoBody}`}
-          className="action-link action-link-primary"
-          style={{ display: "flex", borderRadius: 12, fontSize: 13, marginBottom: 16 }}
+          className="action-link action-link-primary upgrade-primary-cta"
         >
           Express interest via email →
         </a>
-        <Link
-          href="/pricing"
-          style={{ fontSize: 13, color: "var(--text-secondary)", textDecoration: "none" }}
-        >
+        <Link href="/pricing" className="upgrade-back-link">
           ← Back to pricing
         </Link>
-      </div>
+      </Surface>
     </main>
   );
 }

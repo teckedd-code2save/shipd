@@ -12,7 +12,7 @@ export interface PlatformRule {
 // These classes hard-cap scores — insufficient_evidence is intentionally excluded
 // so LLM-extracted signals still produce meaningful scores even when classification
 // confidence is moderate.
-const HARD_CAP_REPO_CLASSES: RepoClass[] = ["notebook_repo", "infra_only", "library_or_package", "cli_tool"];
+const HARD_CAP_REPO_CLASSES: RepoClass[] = ["notebook_repo", "infra_only", "library_or_package", "cli_tool", "mobile_app"];
 
 function deploymentEvidenceCount(context: ScoringContext) {
   const { signals, evidence } = context;

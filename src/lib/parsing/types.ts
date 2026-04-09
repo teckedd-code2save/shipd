@@ -13,6 +13,7 @@ export interface RepoSignals {
     | "express"
     | "react"
     | "python"
+    | "flutter"
     | "csharp"
     | "go"
     | "rust"
@@ -25,6 +26,7 @@ export interface RepoSignals {
     | "node20"
     | "bun"
     | "python"
+    | "dart"
     | "dotnet"
     | "go"
     | "rust"
@@ -46,6 +48,7 @@ export interface RepoSignals {
   hasInfrastructureCode: boolean;
   deploymentDescriptorFiles: string[];
   pythonProjectFiles: string[];
+  flutterProjectFiles: string[];
   csharpProjectFiles: string[];
   goProjectFiles: string[];
   rubyProjectFiles: string[];
@@ -61,5 +64,7 @@ export interface RepoSignals {
       | "eloquent";
   hasMigrations: boolean;
   notebookFiles: string[];
+  hasFlutterWebTarget: boolean;
+  hasFlutterMobileTargets: boolean;
   scannedFiles: number;
 }

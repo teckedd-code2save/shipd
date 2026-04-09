@@ -45,12 +45,14 @@ export default async function ChatPage({
   const plan = analysis.plan;
   const repoLabel = repository ? `${repository.owner}/${repository.name}` : analysis.repoId;
   const topRecommendation = analysis.recommendations[0];
+  const isGuidanceMode = plan.planMode === "guidance_plan";
   const lowEvidence =
+    isGuidanceMode ||
     analysis.classification.repoClass === "insufficient_evidence" ||
     analysis.classification.repoClass === "notebook_repo" ||
     analysis.classification.repoClass === "infra_only" ||
     analysis.classification.repoClass === "library_or_package";
-  const providerDocsUrl = lowEvidence ? null : getPlatformDocsUrl(plan.topPlatform, analysis.signals.framework);
+  const providerDocsUrl = isGuidanceMode || lowEvidence ? null : getPlatformDocsUrl(plan.topPlatform, analysis.signals.framework);
   const topArchetype = analysis.archetypes[0] ?? null;
 
   return (
@@ -89,7 +91,13 @@ export default async function ChatPage({
 
           <ChatSidebarLayout sidebar={<>
               <div className="chat-sidebar-score">
-                {plan.fitType === "no_fit" || plan.score < 30 ? (
+                {isGuidanceMode ? (
+                  <>
+                    <div className="chat-sidebar-label">Mode</div>
+                    <div className="chat-sidebar-platform chat-sidebar-platform-empty">Guidance plan</div>
+                    <div className="chat-sidebar-copy chat-sidebar-copy-tight">Repository-specific go-live guidance, no platform anchoring.</div>
+                  </>
+                ) : plan.fitType === "no_fit" || plan.score < 30 ? (
                   <>
                     <div className="chat-sidebar-label">Recommendation</div>
                     <div className="chat-sidebar-platform chat-sidebar-platform-empty">No clear fit yet</div>
@@ -148,29 +156,44 @@ export default async function ChatPage({
                 </div>
               ) : null}
 
-              <div className="chat-sidebar-section">
-                <div className="chat-sidebar-label">Why we picked {plan.topPlatform}</div>
-                <div className="chat-sidebar-list">
-                  {topRecommendation?.reasons.length ? (
-                    topRecommendation.reasons.map((reason: string, index: number) => (
-                      <div key={`${reason}-${index}`} className="chat-sidebar-list-item neutral">
-                        {reason}
+              {!isGuidanceMode ? (
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-label">Why we picked {plan.topPlatform}</div>
+                  <div className="chat-sidebar-list">
+                    {topRecommendation?.reasons.length ? (
+                      topRecommendation.reasons.map((reason: string, index: number) => (
+                        <div key={`${reason}-${index}`} className="chat-sidebar-list-item neutral">
+                          {reason}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="chat-sidebar-list-item neutral">
+                        Specific reasoning will appear here once Shipd has enough repository signals.
                       </div>
-                    ))
-                  ) : (
-                    <div className="chat-sidebar-list-item neutral">
-                      Specific reasoning will appear here once Shipd has enough repository signals.
-                    </div>
-                  )}
-                  {analysis.signals.primaryAppRoot ? (
-                    <div className="chat-sidebar-list-item neutral">
-                      This plan is based on {formatRoot(analysis.signals.primaryAppRoot)}.
-                    </div>
-                  ) : null}
+                    )}
+                    {analysis.signals.primaryAppRoot ? (
+                      <div className="chat-sidebar-list-item neutral">
+                        This plan is based on {formatRoot(analysis.signals.primaryAppRoot)}.
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
-              {topRecommendation?.evidence.length ? (
+              {isGuidanceMode && plan.guidanceTracks && plan.guidanceTracks.length > 0 ? (
+                <div className="chat-sidebar-section">
+                  <div className="chat-sidebar-label">Guidance tracks</div>
+                  <div className="chat-sidebar-list">
+                    {plan.guidanceTracks.map((track, index) => (
+                      <div key={`${track.title}-${index}`} className="chat-sidebar-list-item neutral">
+                        {track.title}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {!isGuidanceMode && topRecommendation?.evidence.length ? (
                 <div className="chat-sidebar-section">
                   <div className="chat-sidebar-label">Supporting evidence</div>
                   <div className="chat-sidebar-list">

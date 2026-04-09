@@ -22,6 +22,7 @@ export function formatRepoClassLabel(value: string) {
     static_site: "Static site",
     service_app: "Backend service",
     python_service: "Python service",
+    mobile_app: "Mobile app",
     cloudflare_worker_app: "Cloudflare Worker",
     library_or_package: "Library / package",
     notebook_repo: "Data notebooks",

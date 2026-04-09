@@ -17,6 +17,7 @@ function chooseFramework(current: RepoSignals["framework"], next: RepoSignals["f
   const rank: Record<NonNullable<RepoSignals["framework"]>, number> = {
     unknown: 0,
     react: 1,
+    flutter: 2,
     go: 2,
     rust: 2,
     java: 2,
@@ -43,6 +44,7 @@ function chooseRuntime(current: RepoSignals["runtime"], next: RepoSignals["runti
   if (!next || next === "unknown") return current;
   if (current === "node20" || next === "node20") return "node20";
   if (current === "dotnet" || next === "dotnet") return "dotnet";
+  if (current === "dart" || next === "dart") return "dart";
   return current;
 }
 
@@ -76,6 +78,7 @@ function mergeSignals(base: RepoSignals, next: Partial<RepoSignals>): RepoSignal
       new Set([...base.deploymentDescriptorFiles, ...(next.deploymentDescriptorFiles ?? [])])
     ),
     pythonProjectFiles: Array.from(new Set([...base.pythonProjectFiles, ...(next.pythonProjectFiles ?? [])])),
+    flutterProjectFiles: Array.from(new Set([...base.flutterProjectFiles, ...(next.flutterProjectFiles ?? [])])),
     csharpProjectFiles: Array.from(new Set([...base.csharpProjectFiles, ...(next.csharpProjectFiles ?? [])])),
     goProjectFiles: Array.from(new Set([...base.goProjectFiles, ...(next.goProjectFiles ?? [])])),
     rubyProjectFiles: Array.from(new Set([...base.rubyProjectFiles, ...(next.rubyProjectFiles ?? [])])),
@@ -85,6 +88,8 @@ function mergeSignals(base: RepoSignals, next: Partial<RepoSignals>): RepoSignal
     orm: next.orm ?? base.orm,
     hasMigrations: next.hasMigrations ?? base.hasMigrations,
     notebookFiles: Array.from(new Set([...base.notebookFiles, ...(next.notebookFiles ?? [])])),
+    hasFlutterWebTarget: next.hasFlutterWebTarget ?? base.hasFlutterWebTarget,
+    hasFlutterMobileTargets: next.hasFlutterMobileTargets ?? base.hasFlutterMobileTargets,
     scannedFiles: Math.max(base.scannedFiles, next.scannedFiles ?? base.scannedFiles)
   };
 }
@@ -166,6 +171,7 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
     hasInfrastructureCode: false,
     deploymentDescriptorFiles: [],
     pythonProjectFiles: [],
+    flutterProjectFiles: [],
     csharpProjectFiles: [],
     goProjectFiles: [],
     rubyProjectFiles: [],
@@ -175,6 +181,8 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
     orm: undefined,
     hasMigrations: false,
     notebookFiles: [],
+    hasFlutterWebTarget: false,
+    hasFlutterMobileTargets: false,
     scannedFiles: Object.keys(files).length
   };
 
@@ -210,6 +218,14 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
   });
 
   for (const [filePath, content] of entries) {
+    if (filePath.startsWith("web/")) {
+      signals = mergeSignals(signals, { hasFlutterWebTarget: true });
+    }
+
+    if (filePath.startsWith("android/") || filePath.startsWith("ios/")) {
+      signals = mergeSignals(signals, { hasFlutterMobileTargets: true });
+    }
+
     if (filePath === "turbo.json" || filePath === "pnpm-workspace.yaml" || filePath === "nx.json") {
       registerWorkspaceRoot(".");
       evidence.push({
@@ -348,6 +364,71 @@ export function scanRepositoryFiles(files: RepositoryFileMap) {
           }
         });
       }
+      continue;
+    }
+
+    if (
+      filePath === "pubspec.yaml" ||
+      filePath.endsWith("/pubspec.yaml")
+    ) {
+      signals = mergeSignals(signals, {
+        framework: "flutter",
+        runtime: "dart",
+        flutterProjectFiles: [filePath],
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push(
+        {
+          kind: "framework",
+          value: "flutter",
+          sourceFile: filePath,
+          confidence: 0.94,
+          metadata: {
+            appRoot: inferAppRootFromPath(filePath)
+          }
+        },
+        {
+          kind: "runtime",
+          value: "dart",
+          sourceFile: filePath,
+          confidence: 0.9,
+          metadata: {
+            appRoot: inferAppRootFromPath(filePath)
+          }
+        }
+      );
+      registerCandidateRoot(filePath, "framework");
+      findings.push({
+        filePath,
+        severity: "ok",
+        title: "Flutter project manifest detected",
+        detail: `${filePath} identifies a Flutter/Dart project.`
+      });
+      continue;
+    }
+
+    if (filePath === "lib/main.dart" || filePath.endsWith("/lib/main.dart")) {
+      signals = mergeSignals(signals, {
+        framework: signals.framework === "unknown" ? "flutter" : signals.framework,
+        runtime: signals.runtime === "unknown" ? "dart" : signals.runtime,
+        deploymentDescriptorFiles: [filePath]
+      });
+      evidence.push({
+        kind: "entrypoint",
+        value: filePath,
+        sourceFile: filePath,
+        confidence: 0.88,
+        metadata: {
+          appRoot: inferAppRootFromPath(filePath)
+        }
+      });
+      registerCandidateRoot(filePath, "entrypoint");
+      findings.push({
+        filePath,
+        severity: "ok",
+        title: "Flutter entrypoint detected",
+        detail: `${filePath} suggests a runnable Flutter application entrypoint.`
+      });
       continue;
     }
 

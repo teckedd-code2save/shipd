@@ -46,16 +46,9 @@ export function HowItWorks() {
   const step = STEPS[active];
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 28,
-      }}
-    >
+    <div className="landing-how-it-works">
       {/* Step dots nav */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div className="landing-how-it-works-nav">
         {STEPS.map((s, i) => (
           <button
             key={s.number}
@@ -66,28 +59,9 @@ export function HowItWorks() {
                 setPhase("in");
               }, 160);
             }}
-            style={{
-              all: "unset",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "4px 10px",
-              borderRadius: 999,
-              background: i === active ? "rgba(91,108,242,0.15)" : "transparent",
-              border: `1px solid ${i === active ? "rgba(91,108,242,0.4)" : "rgba(255,255,255,0.07)"}`,
-              transition: "all 0.2s ease",
-            }}
+            className={i === active ? "landing-how-it-works-dot is-active" : "landing-how-it-works-dot"}
           >
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 10,
-                letterSpacing: "0.1em",
-                color: i === active ? "var(--accent-blue)" : "var(--text-muted)",
-                transition: "color 0.2s ease",
-              }}
-            >
+            <span className={i === active ? "landing-how-it-works-dot-label is-active" : "landing-how-it-works-dot-label"}>
               {s.number}
             </span>
           </button>
@@ -95,60 +69,19 @@ export function HowItWorks() {
       </div>
 
       {/* Animated content */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 520,
-          minHeight: 108,
-          position: "relative",
-          textAlign: "center",
-        }}
-      >
-        <div
-          style={{
-            opacity: phase === "in" ? 1 : 0,
-            transform: phase === "in" ? "translateY(0)" : "translateY(-12px)",
-            transition: "opacity 0.32s ease, transform 0.32s ease",
-          }}
-        >
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              letterSpacing: "0.12em",
-              color: "var(--accent-blue)",
-              marginBottom: 10,
-              textTransform: "uppercase",
-              opacity: 0.8,
-            }}
-          >
+      <div className="landing-how-it-works-content-wrap">
+        <div className={phase === "in" ? "landing-how-it-works-content is-in" : "landing-how-it-works-content is-out"}>
+          <p className="landing-how-it-works-step">
             {step.number} / 04
           </p>
-          <h3
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.25,
-              marginBottom: 10,
-              color: "var(--text-primary)",
-            }}
-          >
+          <h3 className="landing-how-it-works-title">
             {step.title}
           </h3>
-          <p
-            style={{
-              fontSize: 15,
-              color: "var(--text-secondary)",
-              lineHeight: 1.65,
-              margin: 0,
-            }}
-          >
+          <p className="landing-how-it-works-copy">
             {step.desc}
           </p>
         </div>
       </div>
-
     </div>
   );
 }

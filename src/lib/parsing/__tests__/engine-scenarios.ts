@@ -246,6 +246,29 @@ def read_root():
     expect: { framework: "python", repoClass: "python_service", topPlatform: "Railway" }
   },
 
+  // ── Flutter mobile/web app ──────────────────────────────────────────────────
+  {
+    name: "Flutter app",
+    description: "Flutter project with pubspec and lib/main.dart",
+    files: {
+      "pubspec.yaml": `name: shipd_flutter_app
+description: Example flutter app
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter`,
+      "lib/main.dart": `import 'package:flutter/material.dart';
+void main() {
+  runApp(const MaterialApp(home: Scaffold(body: Text('Shipd'))));
+}`,
+      "android/app/build.gradle": "plugins { id 'com.android.application' }",
+      "ios/Runner/Info.plist": "<plist></plist>",
+      "web/index.html": "<!doctype html><html><body><script src=\"flutter.js\"></script></body></html>"
+    },
+    expect: { framework: "flutter", repoClass: "mobile_app" }
+  },
+
   // ── Rust / Axum ─────────────────────────────────────────────────────────────
   {
     name: "Rust Axum service",

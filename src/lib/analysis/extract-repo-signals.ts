@@ -20,6 +20,8 @@ function scoreFileForInclusion(path: string): number {
   if (path === "requirements.txt") return 76;
   if (path === "setup.py" || path === "Pipfile") return 74;
   if (path === "go.mod") return 78;
+  if (path === "pubspec.yaml") return 80;
+  if (path === "lib/main.dart" || path.endsWith("/lib/main.dart")) return 78;
   if (path === "Cargo.toml") return 78;
   if (path === "pom.xml" || path === "build.gradle" || path === "build.gradle.kts") return 78;
   if (path.endsWith(".env.example") || path.endsWith(".env.sample")) return 72;
@@ -98,8 +100,8 @@ repoTopology:
 
 dotnetAppType: "web" if any .csproj uses Microsoft.NET.Sdk.Web, "generic" for console/worker/library, "unknown" if no .NET detected.
 
-framework: "nextjs" | "express" | "react" | "python" | "csharp" | "go" | "rust" | "java" | "ruby" | "unknown"
-runtime:   "node18" | "node20" | "bun" | "python" | "dotnet" | "go" | "java" | "ruby" | "rust" | "unknown"
+framework: "nextjs" | "express" | "react" | "python" | "flutter" | "csharp" | "go" | "rust" | "java" | "ruby" | "unknown"
+runtime:   "node18" | "node20" | "bun" | "python" | "dart" | "dotnet" | "go" | "java" | "ruby" | "rust" | "unknown"
 
 detectedPlatformConfigs: values from this set: "vercel", "fly", "railway", "render", "netlify", "cloudflare", "heroku", "aws", "gcp", "azure", "digitalocean"
   - "heroku" if Procfile is present
@@ -118,6 +120,7 @@ repoClass (pick one):
   "static_site"           – static HTML/CSS, no server runtime
   "service_app"           – backend service (.NET, Express, custom server, multi-service .NET solution)
   "python_service"        – Python web service (FastAPI, Flask, Django, etc.)
+  "mobile_app"            – Mobile-first app (Flutter/React Native/native)
   "cloudflare_worker_app" – wrangler.toml present
   "library_or_package"    – npm/pip package, not a deployable app
   "notebook_repo"         – Jupyter notebooks dominate
@@ -208,6 +211,15 @@ GO RULES
 - If main.go uses os.Args, cobra, flag, cli packages and NO net/http server patterns = repoClass "cli_tool", confidence 0.88+
 - If main.go imports net/http, gin, echo, fiber, chi, gorilla/mux = repoClass "service_app", dotnetAppType irrelevant
 - Library/package without main function = repoClass "library_or_package"
+
+───────────────────────────────────────
+FLUTTER RULES
+───────────────────────────────────────
+- pubspec.yaml present = framework "flutter", runtime "dart"
+- lib/main.dart present = deploymentDescriptorFiles include lib/main.dart and entrypoint evidence
+- android/ or ios/ directory presence = hasFlutterMobileTargets true
+- web/ directory presence = hasFlutterWebTarget true
+- Flutter repos should use repoClass "mobile_app" (not insufficient_evidence) unless evidence is truly contradictory
 
 ───────────────────────────────────────
 CLI TOOL RULES

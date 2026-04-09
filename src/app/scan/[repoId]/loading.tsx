@@ -1,13 +1,15 @@
+import { Surface } from "@/components/ui/surface";
+
 export default function ScanLoading() {
   return (
     <main className="page">
-      <div className="loading-block" style={{ width: 220, height: 36, marginBottom: 10 }} />
-      <div className="loading-block" style={{ width: 360, height: 18, marginBottom: 24 }} />
-      <section className="panel" style={{ padding: 20, display: "grid", gap: 14 }}>
+      <div className="loading-block mb-2.5 h-9 w-[220px]" />
+      <div className="loading-block mb-6 h-[18px] w-[360px]" />
+      <Surface className="grid gap-3.5 p-5">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="loading-block" style={{ width: "100%", height: 84 }} />
+          <div key={index} className="loading-block h-[84px] w-full" />
         ))}
-      </section>
+      </Surface>
     </main>
   );
 }

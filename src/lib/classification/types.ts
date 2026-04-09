@@ -3,6 +3,7 @@ export type RepoClass =
   | "static_site"
   | "service_app"
   | "python_service"
+  | "mobile_app"
   | "cloudflare_worker_app"
   | "library_or_package"
   | "notebook_repo"

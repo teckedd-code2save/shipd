@@ -3,10 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getPlatformSteps } from "@/lib/analysis/platform-steps";
-import { SendIcon, SparklesIcon } from "@/components/ui/icons";
+import { PauseIcon, PlayIcon, SendIcon, SparklesIcon } from "@/components/ui/icons";
 import { Surface, SurfaceDescription, SurfaceHeader, SurfaceTitle } from "@/components/ui/surface";
 
 type PlanFitType = "clean" | "multi_service" | "no_fit";
+type PlanMode = "platform_plan" | "guidance_plan";
+
+interface GuidanceTrack {
+  title: string;
+  description: string;
+  actions: string[];
+  docs?: string[];
+}
 
 interface EnvProvider {
   name: string;
@@ -22,6 +30,7 @@ interface EnvProviderSuggestion {
 }
 
 interface DeploymentPlan {
+  planMode?: PlanMode;
   title: string;
   summary: string;
   topPlatform: string;
@@ -32,6 +41,7 @@ interface DeploymentPlan {
   nextSteps: string[];
   fitType?: PlanFitType;
   altPaths?: string[];
+  guidanceTracks?: GuidanceTrack[];
   envProviders?: EnvProviderSuggestion[];
 }
 
@@ -239,11 +249,46 @@ function ExpandableStep({
 
 function NoFitCard({ plan }: { plan: DeploymentPlan }) {
   const isMulti = plan.fitType === "multi_service";
+  const isGuidance = plan.planMode === "guidance_plan";
   return (
     <div className="no-fit-card">
-      <div className="no-fit-badge">{isMulti ? "Multi-service repository" : "No clean platform fit"}</div>
+      <div className="no-fit-badge">
+        {isGuidance ? "Guidance mode" : isMulti ? "Multi-service repository" : "No clean platform fit"}
+      </div>
       <p className="no-fit-copy">{plan.summary}</p>
-      {plan.altPaths && plan.altPaths.length > 0 && (
+      {isGuidance && plan.guidanceTracks && plan.guidanceTracks.length > 0 ? (
+        <>
+          <div className="no-fit-section-label">Guidance tracks</div>
+          <div className="guidance-tracks">
+            {plan.guidanceTracks.map((track, i) => (
+              <div key={`${track.title}-${i}`} className="guidance-track">
+                <div className="guidance-track-title">{track.title}</div>
+                <p className="guidance-track-description">{track.description}</p>
+                <ul className="guidance-track-actions">
+                  {track.actions.map((action, actionIndex) => (
+                    <li key={actionIndex}>{action}</li>
+                  ))}
+                </ul>
+                {track.docs && track.docs.length > 0 ? (
+                  <div className="guidance-track-docs">
+                    {track.docs.map((docUrl, docIndex) => (
+                      <a
+                        key={`${docUrl}-${docIndex}`}
+                        href={docUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="guidance-track-doc"
+                      >
+                        Reference
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : plan.altPaths && plan.altPaths.length > 0 ? (
         <>
           <div className="no-fit-section-label">Better deployment paths</div>
           <div className="no-fit-paths">
@@ -255,8 +300,7 @@ function NoFitCard({ plan }: { plan: DeploymentPlan }) {
             ))}
           </div>
         </>
-      )}
-      <div className="no-fit-section-label">Closest available option: {plan.topPlatform} ({plan.score}/100)</div>
+      ) : null}
     </div>
   );
 }
@@ -272,8 +316,12 @@ function PlanCard({
   lead: string;
   framework?: string;
 }) {
-  const isNoFit = plan.fitType === "no_fit" || plan.fitType === "multi_service";
-  const steps = useMemo(() => getPlatformSteps(plan.topPlatform, framework), [plan.topPlatform, framework]);
+  const isGuidance = plan.planMode === "guidance_plan";
+  const isNoFit = plan.fitType === "no_fit" || plan.fitType === "multi_service" || isGuidance;
+  const steps = useMemo(
+    () => (isGuidance ? [] : getPlatformSteps(plan.topPlatform, framework)),
+    [isGuidance, plan.topPlatform, framework]
+  );
   const [openStep, setOpenStep] = useState<number | null>(null);
 
   function toggle(i: number) {
@@ -314,23 +362,25 @@ function PlanCard({
         </div>
       )}
 
-      <div className="chat-plan-section">
-        <div className="chat-plan-section-label">
-          {isNoFit ? "If deploying to " + plan.topPlatform : "Deployment steps"}
-          <span className="chat-plan-section-hint">click to expand</span>
+      {!isGuidance ? (
+        <div className="chat-plan-section">
+          <div className="chat-plan-section-label">
+            {isNoFit ? "If deploying to " + plan.topPlatform : "Deployment steps"}
+            <span className="chat-plan-section-hint">click to expand</span>
+          </div>
+          <div className="exp-steps">
+            {steps.map((step, i) => (
+              <ExpandableStep
+                key={i}
+                step={step}
+                index={i}
+                isOpen={openStep === i}
+                onToggle={() => toggle(i)}
+              />
+            ))}
+          </div>
         </div>
-        <div className="exp-steps">
-          {steps.map((step, i) => (
-            <ExpandableStep
-              key={i}
-              step={step}
-              index={i}
-              isOpen={openStep === i}
-              onToggle={() => toggle(i)}
-            />
-          ))}
-        </div>
-      </div>
+      ) : null}
 
       {plan.envProviders && plan.envProviders.length > 0 && (
         <div className="chat-plan-section">
@@ -363,9 +413,16 @@ function PlanCard({
 
 function buildLead({ repoLabel, initialPlan, repoClass, framework, runtime, primaryAppRoot }: ChatWorkspaceProps) {
   const rootSuffix = primaryAppRoot && primaryAppRoot !== "." ? ` (root: ${primaryAppRoot})` : "";
+  const isGuidance = initialPlan.planMode === "guidance_plan";
 
-  if (initialPlan.fitType === "no_fit" || initialPlan.score < 30) {
-    return `Shipd couldn't identify a deployment platform for ${repoLabel} from the files alone. Ask me anything — I've read the README and can walk you through getting this deployed step by step.`;
+  if (isGuidance) {
+    if (repoClass === "notebook_repo" || framework === "python") {
+      return `${repoLabel}${rootSuffix} is being handled in guidance mode. Shipd will walk you through turning notebooks into a deployable product path without forcing a platform recommendation.`;
+    }
+    if (framework === "flutter" || repoClass === "mobile_app") {
+      return `${repoLabel}${rootSuffix} is a Flutter/mobile project. Shipd will guide web and mobile release tracks instead of forcing a single-host platform plan.`;
+    }
+    return `${repoLabel}${rootSuffix} is in guidance mode. Shipd will focus on concrete next actions to make this repo deployable before platform selection.`;
   }
   if (repoClass === "insufficient_evidence" || repoClass === "notebook_repo" || repoClass === "library_or_package") {
     return `Shipd couldn't find enough deployment signals in ${repoLabel} to make a strong call yet. Work through the steps below to surface a cleaner path.`;
@@ -383,6 +440,21 @@ function buildLead({ repoLabel, initialPlan, repoClass, framework, runtime, prim
 }
 
 function buildQuickPrompts({ framework, runtime, initialPlan }: Pick<ChatWorkspaceProps, "framework" | "runtime" | "initialPlan">) {
+  if (initialPlan.planMode === "guidance_plan") {
+    if (framework === "flutter") {
+      return [
+        "How do I ship this Flutter app to web?",
+        "How should I handle Android and iOS releases?",
+        "What backend path should pair with this app?"
+      ];
+    }
+    return [
+      "Best path for notebooks and data-science repos",
+      "How do I productionize this repository?",
+      "What should I add so Shipd can generate a platform plan?"
+    ];
+  }
+
   if (framework === "csharp" || runtime === "dotnet") {
     return [`How do I deploy this to ${initialPlan.topPlatform}?`, "Do I need a Dockerfile?", "Why not a different platform?"];
   }
@@ -426,6 +498,7 @@ function AssistantMessage({ bubble, lead }: { bubble: ChatBubble; lead: string }
 
 export function ChatWorkspace(props: ChatWorkspaceProps) {
   const { repoId, repoLabel, initialPlan, framework, runtime, repoClass, primaryAppRoot } = props;
+  const isGuidanceMode = initialPlan.planMode === "guidance_plan";
 
   const lead = useMemo(
     () => buildLead({ repoId, repoLabel, initialPlan, framework, runtime, repoClass, primaryAppRoot }),
@@ -444,6 +517,10 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
   const [messages, setMessages] = useState<ChatBubble[]>([initialBubble]);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [voiceState, setVoiceState] = useState<"idle" | "loading" | "playing" | "paused" | "unavailable" | "error">("idle");
+  const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   const historyLoaded = useRef(false);
 
   // Load persisted chat history once per repoId
@@ -452,6 +529,16 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
     setMessages([initialBubble]);
     setInput("");
     setIsSubmitting(false);
+    setVoiceState("idle");
+    setVoiceMessage(null);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
 
     void fetch(`/api/chat/history?repoId=${repoId}`)
       .then((r) => r.json())
@@ -469,6 +556,81 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId]);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+    };
+  }, []);
+
+  async function toggleVoiceSummary() {
+    if (voiceState === "loading") return;
+    if (voiceState === "playing" && audioRef.current) {
+      audioRef.current.pause();
+      setVoiceState("paused");
+      return;
+    }
+    if (voiceState === "paused" && audioRef.current) {
+      void audioRef.current.play().catch(() => {
+        setVoiceState("error");
+        setVoiceMessage("Playback failed. Try again.");
+      });
+      return;
+    }
+
+    setVoiceState("loading");
+    setVoiceMessage(null);
+
+    try {
+      const response = await fetch(`/api/voice/summary?repoId=${repoId}`);
+
+      if (response.status === 204) {
+        setVoiceState("unavailable");
+        setVoiceMessage("Voice summary is disabled.");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Voice request failed");
+      }
+
+      const blob = await response.blob();
+      if (blob.size === 0) {
+        setVoiceState("unavailable");
+        setVoiceMessage("No voice summary available.");
+        return;
+      }
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audioUrlRef.current = audioUrl;
+      audio.onplay = () => setVoiceState("playing");
+      audio.onpause = () => setVoiceState("paused");
+      audio.onended = () => setVoiceState("idle");
+      audio.onerror = () => {
+        setVoiceState("error");
+        setVoiceMessage("Audio playback failed.");
+      };
+
+      await audio.play();
+    } catch {
+      setVoiceState("error");
+      setVoiceMessage("Voice summary is unavailable right now.");
+    }
+  }
 
   async function sendMessage(nextInput?: string) {
     const value = (nextInput ?? input).trim();
@@ -510,16 +672,32 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
       <SurfaceHeader className="chat-workspace-header">
         <div>
           <SurfaceTitle className="chat-workspace-title">{initialPlan.title}</SurfaceTitle>
-          <SurfaceDescription className="chat-workspace-copy">Ask anything about deploying this repo — tradeoffs, blockers, or platform differences.</SurfaceDescription>
+          <SurfaceDescription className="chat-workspace-copy">
+            {isGuidanceMode
+              ? "Ask about productionization paths, readiness gaps, and what to add before choosing a platform."
+              : "Ask anything about deploying this repo — tradeoffs, blockers, or platform differences."}
+          </SurfaceDescription>
+          {voiceMessage ? <div className="chat-voice-note">{voiceMessage}</div> : null}
         </div>
         <div className="chat-workspace-chips">
-          {initialPlan.fitType !== "no_fit" && initialPlan.score >= 30 ? (
+          <button
+            type="button"
+            className="chat-voice-button"
+            onClick={() => {
+              void toggleVoiceSummary();
+            }}
+            disabled={voiceState === "loading"}
+          >
+            {voiceState === "playing" ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
+            {voiceState === "loading" ? "Loading audio..." : voiceState === "playing" ? "Pause summary" : "Play summary"}
+          </button>
+          {!isGuidanceMode && initialPlan.fitType !== "no_fit" && initialPlan.score >= 30 ? (
             <>
               <span className="repo-chip repo-chip-accent">{initialPlan.topPlatform}</span>
               <span className="repo-chip">{initialPlan.score}/100 fit</span>
             </>
           ) : (
-            <span className="repo-chip">No clear fit detected</span>
+            <span className="repo-chip">{isGuidanceMode ? "Guidance mode" : "No clear fit detected"}</span>
           )}
         </div>
       </SurfaceHeader>
@@ -571,7 +749,9 @@ export function ChatWorkspace(props: ChatWorkspaceProps) {
           </button>
         </div>
         <div className="chat-input-hint">
-          Try: &quot;Do I need a Dockerfile?&quot;, &quot;Why not Vercel?&quot;, or &quot;Write me a railway.toml&quot;.
+          {isGuidanceMode
+            ? "Try: “What should I add to make this deployable?”, “How do I productionize this repo?”, or “Give me a go-live checklist”."
+            : "Try: “Do I need a Dockerfile?”, “Why not Vercel?”, or “Write me a railway.toml”."}
         </div>
       </div>
     </Surface>

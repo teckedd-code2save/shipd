@@ -2,6 +2,7 @@ import { Prisma, type PlatformScore as PersistedPlatformScore } from "@/generate
 
 import { matchArchetypes } from "@/lib/archetypes/match-archetypes";
 import type { ArchetypeMatchResult } from "@/lib/archetypes/types";
+import { resolveGuidancePlaybook, type GuidanceTrack } from "@/lib/analysis/guidance-playbooks";
 import { classifyRepository } from "@/lib/classification/classify-repository";
 import type { RepoClassificationResult } from "@/lib/classification/types";
 import type { EvidenceRecord, ScanFinding } from "@/lib/parsing/shared";
@@ -22,8 +23,10 @@ import { enforceAndTrackScan } from "@/server/services/plan-limit-service";
 import { findRepositoryById } from "@/server/services/repository-service";
 
 export type PlanFitType = "clean" | "multi_service" | "no_fit";
+export type PlanMode = "platform_plan" | "guidance_plan";
 
 export interface DeploymentPlanSnapshot {
+  planMode: PlanMode;
   title: string;
   summary: string;
   topPlatform: string;
@@ -34,6 +37,7 @@ export interface DeploymentPlanSnapshot {
   nextSteps: string[];
   fitType: PlanFitType;
   altPaths: string[];
+  guidanceTracks?: GuidanceTrack[];
   envProviders: EnvProviderSuggestion[];
 }
 
@@ -106,7 +110,16 @@ function detectFitType(
   classification: RepoClassificationResult,
   signals?: RepoSignals
 ): PlanFitType {
-  if (classification.repoClass === "cli_tool") return "no_fit";
+  if (
+    classification.repoClass === "cli_tool" ||
+    classification.repoClass === "notebook_repo" ||
+    classification.repoClass === "library_or_package" ||
+    classification.repoClass === "infra_only" ||
+    classification.repoClass === "mobile_app"
+  ) {
+    return "no_fit";
+  }
+
   const topScore = recommendations[0]?.score ?? 0;
   const isMultiService =
     (signals?.repoTopology === "dotnet_solution" && (signals?.csharpProjectFiles.length ?? 0) > 3) ||
@@ -116,6 +129,18 @@ function detectFitType(
   if (isMultiService && topScore < 60) return "multi_service";
   if (topScore < 40) return "no_fit";
   return "clean";
+}
+
+function shouldUseGuidancePlan(fitType: PlanFitType, classification: RepoClassificationResult): boolean {
+  if (fitType === "no_fit") return true;
+
+  return (
+    classification.repoClass === "notebook_repo" ||
+    classification.repoClass === "cli_tool" ||
+    classification.repoClass === "mobile_app" ||
+    classification.repoClass === "library_or_package" ||
+    classification.repoClass === "infra_only"
+  );
 }
 
 function getAltPaths(fitType: PlanFitType, signals?: RepoSignals): string[] {
@@ -154,6 +179,15 @@ function createPlanFromSnapshot(
   };
 
   const fitType = detectFitType(recommendations, classification, signals);
+  const planMode: PlanMode = shouldUseGuidancePlan(fitType, classification) ? "guidance_plan" : "platform_plan";
+  const guidancePlaybook =
+    planMode === "guidance_plan"
+      ? resolveGuidancePlaybook({
+          repoClass: classification.repoClass,
+          framework: signals?.framework,
+          signals
+        })
+      : null;
   const isCliTool = classification.repoClass === "cli_tool";
 
   const lowConfidence =
@@ -165,7 +199,9 @@ function createPlanFromSnapshot(
     topRecommendation.score < 25;
 
   const summary =
-    isCliTool
+    guidancePlaybook
+      ? guidancePlaybook.summary
+      : isCliTool
       ? `This looks like a CLI tool, not a web service. CLI tools are distributed as binaries — not deployed to cloud hosting platforms like Railway or Vercel. Consider publishing via GitHub Releases, Homebrew, or a package registry instead.`
       : fitType === "multi_service"
       ? `This is a multi-service repository. No single platform covers all services cleanly. ${topRecommendation.platform} is the closest option — deploying each service independently is the most practical path.`
@@ -182,7 +218,9 @@ function createPlanFromSnapshot(
             }`;
 
   const nextSteps =
-    isCliTool
+    guidancePlaybook
+      ? guidancePlaybook.tracks.flatMap((track) => track.actions.slice(0, 1))
+      : isCliTool
       ? [
           "Create a GitHub Release to distribute the compiled binary",
           "Add a GoReleaser or GitHub Actions workflow to build for multiple platforms",
@@ -241,7 +279,8 @@ function createPlanFromSnapshot(
             ];
 
   return {
-    title: `${topRecommendation.platform} deployment plan`,
+    planMode,
+    title: guidancePlaybook ? "Repository deployment guidance" : `${topRecommendation.platform} deployment plan`,
     summary,
     topPlatform: topRecommendation.platform,
     score: topRecommendation.score,
@@ -250,7 +289,8 @@ function createPlanFromSnapshot(
     warnings: findings.filter((f) => f.severity === "warning").map((f) => f.title),
     nextSteps,
     fitType,
-    altPaths: getAltPaths(fitType, signals),
+    altPaths: guidancePlaybook ? [] : getAltPaths(fitType, signals),
+    guidanceTracks: guidancePlaybook?.tracks,
     envProviders: getEnvProviderSuggestions(signals?.envVars ?? [])
   };
 }
@@ -298,6 +338,7 @@ function normalizeRepoSignals(value: RepoSignals): RepoSignals {
     hasInfrastructureCode: Boolean(value.hasInfrastructureCode),
     deploymentDescriptorFiles: normalizeStringArray(value.deploymentDescriptorFiles),
     pythonProjectFiles: normalizeStringArray(value.pythonProjectFiles),
+    flutterProjectFiles: normalizeStringArray(value.flutterProjectFiles),
     csharpProjectFiles: normalizeStringArray(value.csharpProjectFiles),
     goProjectFiles: normalizeStringArray(value.goProjectFiles),
     rubyProjectFiles: normalizeStringArray(value.rubyProjectFiles),
@@ -307,8 +348,31 @@ function normalizeRepoSignals(value: RepoSignals): RepoSignals {
     orm: (value.orm as RepoSignals["orm"]) ?? undefined,
     hasMigrations: Boolean(value.hasMigrations),
     notebookFiles: normalizeStringArray(value.notebookFiles),
+    hasFlutterWebTarget: Boolean(value.hasFlutterWebTarget),
+    hasFlutterMobileTargets: Boolean(value.hasFlutterMobileTargets),
     scannedFiles: typeof value.scannedFiles === "number" ? value.scannedFiles : 0
   };
+}
+
+function normalizeGuidanceTracks(value: unknown): GuidanceTrack[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const record = item as Record<string, unknown>;
+      if (typeof record.title !== "string" || typeof record.description !== "string") return null;
+      const actions = normalizeStringArray(record.actions);
+      if (actions.length === 0) return null;
+      const docs = normalizeStringArray(record.docs);
+      return {
+        title: record.title,
+        description: record.description,
+        actions,
+        ...(docs.length > 0 ? { docs } : {})
+      } satisfies GuidanceTrack;
+    })
+    .filter((item): item is GuidanceTrack => item !== null);
 }
 
 function normalizeClassification(value: unknown): RepoClassificationResult | null {
@@ -428,8 +492,15 @@ async function computeRepositoryAnalysis(repoId: string): Promise<RepositoryAnal
   try {
     const extraction = await extractRepoSignals(files, env.AI_PROVIDER);
     signals = extraction.signals;
-    classification = extraction.classification;
-    archetypes = extraction.archetypes;
+    const deterministicClassification = classifyRepository(signals);
+    classification =
+      deterministicClassification.confidence >= extraction.classification.confidence ||
+      deterministicClassification.repoClass === "mobile_app" ||
+      deterministicClassification.repoClass === "notebook_repo" ||
+      deterministicClassification.repoClass === "cli_tool"
+        ? deterministicClassification
+        : extraction.classification;
+    archetypes = matchArchetypes({ signals, classification, evidence: extraction.evidence });
     findings = extraction.findings;
     evidence = extraction.evidence;
   } catch {
@@ -580,16 +651,21 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
     plan?.planJson && typeof plan.planJson === "object" && !Array.isArray(plan.planJson)
       ? (plan.planJson as Record<string, unknown>)
       : null;
+  const storedPlanMode = storedPlanJson?.planMode as PlanMode | undefined;
 
   const storedPlanMatchesLatestScan =
     Boolean(plan) &&
     plan?.platform === fallbackPlan.topPlatform &&
     plan?.score === fallbackPlan.score &&
-    Math.abs((plan?.confidence ?? 0) - fallbackPlan.confidence) < 0.001;
+    Math.abs((plan?.confidence ?? 0) - fallbackPlan.confidence) < 0.001 &&
+    (storedPlanMode
+      ? storedPlanMode === fallbackPlan.planMode
+      : fallbackPlan.planMode === "platform_plan");
 
   const hydratedPlan: DeploymentPlanSnapshot =
     storedPlanMatchesLatestScan && plan
       ? {
+          planMode: (storedPlanJson?.planMode as PlanMode | undefined) ?? fallbackPlan.planMode,
           title: plan.title,
           summary: plan.summary,
           topPlatform: plan.platform,
@@ -600,6 +676,7 @@ async function loadPersistedRepositoryAnalysis(repoId: string) {
           nextSteps: normalizeStringArray(storedPlanJson?.nextSteps),
           fitType: (storedPlanJson?.fitType as PlanFitType | undefined) ?? fallbackPlan.fitType,
           altPaths: normalizeStringArray(storedPlanJson?.altPaths),
+          guidanceTracks: normalizeGuidanceTracks(storedPlanJson?.guidanceTracks),
           envProviders: getEnvProviderSuggestions(normalizedSignals.envVars)
         }
       : fallbackPlan;
@@ -744,12 +821,14 @@ async function persistRepositoryAnalysis(snapshot: RepositoryAnalysisSnapshot) {
         score: snapshot.plan.score,
         confidence: snapshot.plan.confidence,
         planJson: {
+          planMode: snapshot.plan.planMode,
           blockers: snapshot.plan.blockers,
           warnings: snapshot.plan.warnings,
           nextSteps: snapshot.plan.nextSteps,
           fitType: snapshot.plan.fitType,
-          altPaths: snapshot.plan.altPaths
-        } as Prisma.InputJsonValue
+          altPaths: snapshot.plan.altPaths,
+          guidanceTracks: snapshot.plan.guidanceTracks ?? []
+        } as unknown as Prisma.InputJsonValue
       }
     });
 

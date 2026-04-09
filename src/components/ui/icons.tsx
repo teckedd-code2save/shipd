@@ -122,6 +122,23 @@ export function RefreshIcon({ size = 18, style }: IconProps) {
   );
 }
 
+export function PlayIcon({ size = 18, style }: IconProps) {
+  return (
+    <svg {...iconProps(size)} style={style}>
+      <polygon points="8 5 19 12 8 19 8 5" />
+    </svg>
+  );
+}
+
+export function PauseIcon({ size = 18, style }: IconProps) {
+  return (
+    <svg {...iconProps(size)} style={style}>
+      <line x1="9" y1="5" x2="9" y2="19" />
+      <line x1="15" y1="5" x2="15" y2="19" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ size = 18, style, className }: IconProps) {
   return (
     <svg {...iconProps(size, className)} style={style}>

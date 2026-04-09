@@ -11,13 +11,15 @@ function hasDeploySignals(signals: RepoSignals) {
     signals.workflowFiles.length > 0 ||
     signals.platformConfigFiles.length > 0 ||
     signals.envFilePaths.length > 0 ||
-    signals.pythonProjectFiles.length > 0
+    signals.pythonProjectFiles.length > 0 ||
+    signals.flutterProjectFiles.length > 0
   );
 }
 
 function hasOnlyNotebookSignals(signals: RepoSignals) {
+  const notebookFiles = signals.notebookFiles ?? [];
   return (
-    signals.notebookFiles.length > 0 &&
+    notebookFiles.length > 0 &&
     !hasDeploySignals({
       ...signals,
       notebookFiles: []
@@ -63,6 +65,12 @@ function looksLikeCliTool(signals: RepoSignals) {
 }
 
 export function classifyRepository(signals: RepoSignals): RepoClassificationResult {
+  const flutterSignalsDetected =
+    signals.framework === "flutter" ||
+    signals.runtime === "dart" ||
+    signals.flutterProjectFiles.length > 0 ||
+    signals.deploymentDescriptorFiles.some((file) => file.endsWith("pubspec.yaml"));
+
   if (hasOnlyNotebookSignals(signals)) {
     return {
       repoClass: "notebook_repo",
@@ -75,6 +83,25 @@ export function classifyRepository(signals: RepoSignals): RepoClassificationResu
         "No runnable service entrypoint was detected.",
         "No deployment config or container definition was found."
       ]
+    };
+  }
+
+  if (flutterSignalsDetected) {
+    return {
+      repoClass: "mobile_app",
+      confidence: 0.9,
+      reasons: [
+        signals.flutterProjectFiles[0]
+          ? `${signals.flutterProjectFiles[0]} identifies a Flutter project.`
+          : "Flutter project signals were detected.",
+        signals.hasFlutterWebTarget
+          ? "A Flutter web target was detected."
+          : "No explicit Flutter web target was detected yet.",
+        signals.hasFlutterMobileTargets
+          ? "Android/iOS targets were detected for mobile release workflows."
+          : "Mobile targets were not clearly detected in this scan."
+      ],
+      blockers: []
     };
   }
 

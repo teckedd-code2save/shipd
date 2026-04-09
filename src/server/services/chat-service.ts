@@ -31,21 +31,38 @@ async function getReadmeContent(repoId: string): Promise<string | null> {
 export async function handleChat(repoId: string, message: string) {
   const analysis = await getRepositoryAnalysis(repoId);
   const plan = analysis.plan;
-  const isWeakSignal = plan.fitType === "no_fit" || plan.score < 30;
+  const isGuidanceMode = plan.planMode === "guidance_plan";
+  const isWeakSignal = isGuidanceMode || plan.fitType === "no_fit" || plan.score < 30;
 
   // When signals are weak, fetch the README so the AI can extract deployment guidance from it
   const readme = isWeakSignal ? await getReadmeContent(repoId) : null;
 
   try {
     const topArchetype = analysis.archetypes[0];
+    const guidanceTracks =
+      plan.guidanceTracks && plan.guidanceTracks.length > 0
+        ? plan.guidanceTracks.map((track) => ({
+            title: track.title,
+            description: track.description,
+            actions: track.actions
+          }))
+        : [];
+
     const orchestration = await runChatOrchestration({
       repoId,
       message,
       context: [
         `Repository id: ${repoId}`,
-        `Top platform: ${plan.topPlatform}`,
+        `Plan mode: ${plan.planMode}`,
         `Plan fit: ${plan.fitType} (score ${plan.score}/100)`,
         `Plan summary: ${plan.summary}`,
+        ...(isGuidanceMode
+          ? [
+              "Guidance-mode guardrail: do NOT present a platform recommendation as the best fit.",
+              "Guidance-mode guardrail: provide repo-type-specific productionization tracks and concrete next actions.",
+              `Guidance tracks: ${JSON.stringify(guidanceTracks)}`
+            ]
+          : [`Top platform: ${plan.topPlatform}`]),
         `Repo topology: ${analysis.signals.repoTopology ?? "unknown"}`,
         `Primary app root: ${analysis.signals.primaryAppRoot ?? "unknown"}`,
         `Repo class: ${analysis.classification.repoClass} (${Math.round(analysis.classification.confidence * 100)}%)`,
