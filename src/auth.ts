@@ -13,6 +13,7 @@ const providers = hasAuthEnv()
       GitHub({
         clientId: env.AUTH_GITHUB_ID!,
         clientSecret: env.AUTH_GITHUB_SECRET!,
+        issuer: "https://github.com/login/oauth",
         allowDangerousEmailAccountLinking: false
       })
     ]
