@@ -1,0 +1,28 @@
+# Convoy deployment manifest
+# Tracks files Convoy authored. Source code under src/ is untouched.
+version: 1
+app: shipd
+platform: vercel
+framework: next.js
+runtime: node-20
+packageManager: npm
+dataLayer:
+  - postgres-via-prisma
+authoredFiles:
+  - path: vercel.json
+    purpose: Vercel project config — framework pin and region
+  - path: .env.schema
+    purpose: Required environment variables (no secrets)
+build:
+  command: prisma generate && next build
+  output: .next
+start:
+  command: next start
+rehearsal:
+  target: vercel-preview
+  validations:
+    - next build succeeds
+    - prisma generate runs in build
+    - prisma migrate deploy dry-run on scratch DB
+    - TCP health probe
+    - 60s synthetic load within baseline
