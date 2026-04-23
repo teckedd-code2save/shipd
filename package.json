@@ -8,13 +8,12 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev && prisma generate",
-    "db:push": "prisma db push && prisma generate",
-    "postinstall": "prisma generate"
+    "db:push": "prisma db push && prisma generate"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.0.0",

@@ -93,7 +93,7 @@ export default async function LandingPage() {
           </div>
 
           <div className="landing-homepage-footer-note">
-            Built by Serendepify · Neutral by design · Grounded in code
+            Built by Serendepify · Neutral by design · Grounded in code · Shipped by Convoy
           </div>
         </section>
       </main>
