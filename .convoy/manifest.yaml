@@ -1,28 +1,21 @@
-# Convoy deployment manifest
-# Tracks files Convoy authored. Source code under src/ is untouched.
+# Convoy manifest for shipd
+# This file records which deployment-surface files Convoy owns.
+# Convoy will only modify paths listed here. Everything else is developer-owned.
+
 version: 1
-app: shipd
+project: shipd
 platform: vercel
 framework: next.js
 runtime: node-20
 packageManager: npm
-dataLayer:
-  - postgres-via-prisma
-authoredFiles:
-  - path: vercel.json
-    purpose: Vercel project config — framework pin and region
+
+owned:
   - path: .env.schema
-    purpose: Required environment variables (no secrets)
-build:
-  command: prisma generate && next build
-  output: .next
-start:
-  command: next start
-rehearsal:
-  target: vercel-preview
-  validations:
-    - next build succeeds
-    - prisma generate runs in build
-    - prisma migrate deploy dry-run on scratch DB
-    - TCP health probe
-    - 60s synthetic load within baseline
+    purpose: declares required runtime environment variables
+
+notOwned:
+  - src/**
+  - prisma/**
+  - package.json
+  - vercel.json
+  - next.config.ts
