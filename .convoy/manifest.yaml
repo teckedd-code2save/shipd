@@ -1,0 +1,20 @@
+# Convoy deployment manifest for shipd
+# Files listed here are authored and maintained by Convoy.
+# Do not edit by hand — re-run Convoy to regenerate.
+
+version: 1
+project: shipd
+platform: vercel
+framework: nextjs
+runtime: node-20
+
+authored:
+  - path: vercel.json
+    purpose: Vercel project config (framework, region, build)
+  - path: .env.schema
+    purpose: Required env var contract for deploys
+
+rehearsal:
+  buildCommand: npx prisma generate && next build
+  startCommand: next start
+  migrations: prisma migrate deploy
